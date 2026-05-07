@@ -1,0 +1,2616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+/* ========== 沉浸式滚动条 ========== */
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.15)}
+/* Firefox */
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.08) transparent}
+:root{
+    /* 基础色 */
+    --bg:#080810;--text:#dde4f0;--muted:#94a3b8;
+    --accent:#6366f1;--accent2:#a855f7;
+    --glow:rgba(80,90,255,0.25);
+    /* 个性化变量（JS控制） */
+    --time-font:'Consolas','Courier New',monospace;
+    --time-color:#ffffff;
+    --time-size:5rem;
+    --ui-brightness:1;
+    --accent-primary:#6366f1;
+    --accent-secondary:#a855f7;
+    --bg-overlay:rgba(8,8,16,0.97);
+}
+html,body{
+    width:100%;height:100%;overflow:hidden;
+    font-family:'Segoe UI','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--text);
+    user-select:none;-webkit-user-select:none;
+    cursor:default;
+    opacity:var(--ui-brightness);
+}
+body::before{
+    content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse at 50% 40%,
+        rgba(60,70,180,0.06) 0%,
+        transparent 70%);
+    pointer-events:none;
+}
+
+/* ========== 迷你沉浸模式 ========== */
+.mini-mode{
+    position:fixed;inset:0;
+    background:var(--bg);
+    display:none;
+    flex-direction:column;
+    align-items:center;justify-content:center;
+    z-index:10;
+    cursor:pointer;
+}
+.mini-mode.active{display:flex}
+
+/* 底部细进度线 */
+.mini-progress{
+    position:fixed;bottom:0;left:0;right:0;
+    height:3px;
+    background:rgba(255,255,255,0.06);
+}
+.mini-fill{
+    height:100%;width:0%;
+    background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));
+    transition:width 1s linear;
+    box-shadow:0 0 14px rgba(99,102,241,0.5);
+}
+
+/* 迷你时间（居中大字，高对比度） */
+.mini-time{
+    font-family:var(--time-font);
+    font-size:var(--time-size);
+    font-weight:700;
+    letter-spacing:0.06em;
+    color:var(--time-color);
+    line-height:1;
+    text-shadow:0 0 40px rgba(99,102,241,0.4),0 0 80px rgba(99,102,241,0.2);
+}
+/* 迷你状态 */
+.mini-state{
+    font-size:0.65rem;color:var(--text);
+    margin-top:0.6rem;letter-spacing:0.3em;text-transform:uppercase;
+    opacity:0.7;
+}
+/* 迷你切换按钮（主界面右下角，固定显示） */
+.mini-switch{
+    position:fixed;bottom:1.2rem;right:1.2rem;
+    padding:0.35rem 0.7rem;
+    border-radius:1.5rem;
+    background:rgba(99,102,241,0.15);
+    border:1px solid rgba(99,102,241,0.3);
+    color:var(--accent-primary);font-size:0.65rem;
+    cursor:pointer;
+    transition:all 0.25s;
+    z-index:999;
+}
+.mini-switch:hover{background:rgba(99,102,241,0.3);}
+.mini-micro-toggle{
+    position:fixed;bottom:1rem;left:1rem;
+    width:1.4rem;height:1.4rem;
+    border-radius:50%;
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.06);
+    color:var(--muted);font-size:0.55rem;
+    cursor:pointer;
+    transition:all 0.25s;opacity:0.3;
+    display:flex;align-items:center;justify-content:center;
+}
+.mini-micro-toggle:hover{opacity:1;border-color:var(--accent-secondary);}
+
+
+.wrap{
+    position:relative;z-index:1;
+    width:100%;height:100%;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    cursor:pointer;
+}
+/* 心流引导文字 */
+.clock-hint{
+    font-size:0.6rem;color:var(--muted);
+    letter-spacing:0.25em;text-transform:uppercase;
+    margin-top:0.5rem;opacity:0;
+    transition:opacity 0.6s;position:relative;z-index:2;
+}
+.clock-hint.show{opacity:0.8}
+
+/* 极细进度环 - 悬浮在时钟周围 */
+.ring{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    width:240px;height:240px;pointer-events:none;
+}
+.ring svg{width:100%;height:100%}
+.ring-track{
+    fill:none;stroke:rgba(255,255,255,0.04);stroke-width:1;
+}
+.ring-progress{
+    fill:none;stroke:var(--accent-primary);stroke-width:1.2;
+    stroke-linecap:round;
+    filter:drop-shadow(0 0 8px rgba(99,102,241,0.5));
+    stroke-dasharray:716;stroke-dashoffset:716;
+    transition:stroke-dashoffset 0.5s linear;
+}
+
+/* 呼吸光效 */
+.breathe{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle,var(--glow) 0%,transparent 70%);
+    opacity:0.3;pointer-events:none;
+    animation:breathe 4s ease-in-out infinite;
+}
+@keyframes breathe{
+    0%,100%{opacity:0.15;transform:translate(-50%,-50%) scale(0.9)}
+    50%{opacity:0.5;transform:translate(-50%,-50%) scale(1.1)}
+}
+
+/* 时钟数字 */
+.clock{
+    font-size:4.2rem;font-weight:700;
+    font-family:var(--time-font);
+    letter-spacing:0.05em;
+    color:var(--time-color);
+    text-shadow:0 0 40px rgba(99,102,241,0.4);
+    line-height:1;position:relative;z-index:2;
+    transition:filter 0.3s;
+}
+.clock.running{text-shadow:0 0 40px rgba(99,102,241,0.6),0 0 80px rgba(99,102,241,0.3)}
+.clock.done{animation:flash 0.5s ease-in-out 3}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* 模式标签 */
+.mode-text{
+    font-size:0.7rem;color:var(--text);
+    letter-spacing:0.35em;text-transform:uppercase;
+    margin-top:0.5rem;opacity:0.8;position:relative;z-index:2;
+}
+
+/* 任务提示 */
+.task-hint{
+    font-size:0.7rem;color:var(--text);
+    margin-top:1rem;opacity:0;max-width:200px;
+    text-align:center;line-height:1.5;
+    transition:opacity 0.5s;position:relative;z-index:2;
+}
+.task-hint.show{opacity:0.7}
+
+/* 控制按钮 */
+.ctrl{
+    display:flex;gap:0.6rem;margin-top:1.2rem;
+    position:relative;z-index:2;
+}
+.ctrl-btn{
+    padding:0.4rem 1.2rem;
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:1.5rem;
+    background:rgba(255,255,255,0.02);
+    color:var(--text);font-size:0.65rem;
+    letter-spacing:0.1em;cursor:pointer;
+    transition:all 0.25s;opacity:0.7;
+}
+.ctrl-btn:hover{opacity:1;background:rgba(255,255,255,0.05);border-color:var(--accent-primary)}
+.ctrl-btn.primary{
+    background:rgba(70,80,220,0.25);border-color:rgba(80,90,255,0.3);
+    opacity:1;
+}
+.ctrl-btn.primary:hover{background:rgba(70,80,220,0.4);border-color:var(--accent-primary)}
+
+/* 底部进度条（极细横向） */
+.hbar{
+    position:fixed;bottom:0;left:0;width:100%;height:2px;
+    background:rgba(255,255,255,0.03);z-index:3;
+}
+.hbar-fill{
+    height:100%;width:0%;
+    background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));
+    transition:width 1s linear;
+    box-shadow:0 0 10px rgba(99,102,241,0.5);
+}
+
+/* ========== 禅意菜单 ========== */
+.menu-btn{
+    position:fixed;bottom:0.6rem;right:0.6rem;
+    width:1.6rem;height:1.6rem;
+    border-radius:50%;
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.05);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:all 0.2s;z-index:50;opacity:0.4;
+}
+.menu-btn:hover{opacity:1;background:rgba(255,255,255,0.07);transform:scale(1.1)}
+.menu-icon{
+    width:0.7rem;height:1px;background:rgba(220,230,250,0.9);
+    position:relative;
+}
+.menu-icon::before,.menu-icon::after{
+    content:'';position:absolute;width:100%;height:100%;
+    background:rgba(220,230,250,0.9);left:0;
+}
+.menu-icon::before{top:-0.25rem}
+.menu-icon::after{top:0.25rem}
+
+.quick-settings{
+    position:fixed;bottom:2.6rem;right:0.6rem;
+    display:flex;flex-direction:column;gap:0.3rem;
+    opacity:0;pointer-events:none;
+    transform:translateY(6px);
+    transition:all 0.2s;z-index:49;
+}
+.quick-settings.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+.settings-tab{padding:0.3rem 0.6rem;font-size:0.65rem;border-radius:0.4rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:var(--text);cursor:pointer;transition:all 0.2s}
+.settings-tab.active{background:rgba(99,102,241,0.2);border-color:var(--accent-primary);color:var(--accent-primary)}
+.qs-btn{
+    padding:0.35rem 0.8rem;
+    background:rgba(8,8,18,0.92);
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:1rem;color:var(--text);
+    font-size:0.6rem;cursor:pointer;
+    transition:all 0.15s;white-space:nowrap;
+    backdrop-filter:blur(8px);
+}
+.qs-btn:hover{background:rgba(255,255,255,0.07);border-color:var(--accent-primary)}
+
+/* ========== 浮层面板 ========== */
+.overlay{
+    position:fixed;inset:0;
+    background:rgba(6,6,14,0.97);
+    backdrop-filter:blur(16px);
+    z-index:100;display:none;
+    flex-direction:column;
+    align-items:center;justify-content:center;
+    opacity:0;transition:opacity 0.25s;
+}
+.overlay.show{display:flex;opacity:1}
+.close-btn{
+    position:fixed;top:0.8rem;right:0.8rem;
+    width:1.4rem;height:1.4rem;border-radius:50%;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.06);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:all 0.15s;z-index:101;
+}
+.close-btn:hover{background:rgba(255,255,255,0.09)}
+.close-btn::before,.close-btn::after{
+    content:'';position:absolute;
+    width:0.6rem;height:1px;
+    background:var(--muted);transform:rotate(45deg);
+}
+.close-btn::after{transform:rotate(-45deg)}
+.panel{width:90%;max-width:300px}
+.panel-title{
+    font-size:0.7rem;color:var(--muted);text-align:center;
+    margin-bottom:1rem;letter-spacing:0.2em;
+}
+
+/* 统计面板 */
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:1rem}
+.sitem{text-align:center;padding:0.8rem 0.3rem;background:rgba(255,255,255,0.02);border-radius:0.6rem;border:1px solid rgba(255,255,255,0.04)}
+.sval{font-size:1.4rem;font-weight:200}
+.slabel{font-size:0.6rem;color:var(--muted);margin-top:0.2rem}
+.hist{overflow-y:auto;flex:1}
+.hitem{display:flex;justify-content:space-between;align-items:center;padding:0.7rem 0.8rem;background:rgba(255,255,255,0.025);border-radius:0.6rem;border:1px solid rgba(255,255,255,0.04);transition:border-color 0.2s}
+.hitem:hover{border-color:rgba(99,102,241,0.25);background:rgba(99,102,241,0.04)}
+.hitem .t{color:#94a3b8;font-size:0.65rem}
+.hitem .t{color:var(--muted);font-size:0.6rem}
+.done .st{color:#3ecf7a}
+.fail .st{color:#ef5555}
+
+.mitem span{flex:1;word-break:break-all}
+.mitem.done{opacity:0.35}
+.minput{display:flex;gap:0.4rem}
+.minput input{flex:1;padding:0.45rem 0.8rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:1.2rem;color:var(--text);font-size:0.7rem;outline:none}
+.minput input:focus{border-color:var(--accent-primary)}
+.minput button{padding:0.45rem 0.8rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:1.2rem;color:var(--text);font-size:0.7rem;cursor:pointer}
+
+/* 多巴胺菜单 */
+.dlist{display:flex;flex-direction:column;gap:0.4rem}
+.ditem{padding:0.6rem 0.8rem;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:0.6rem;cursor:pointer;transition:all 0.15s}
+.ditem:hover{border-color:var(--accent-primary);background:rgba(70,80,220,0.08)}
+.dname{font-size:0.75rem;margin-bottom:0.1rem}
+.ddesc{font-size:0.6rem;color:var(--muted)}
+
+/* 紧急重置 */
+.rlist{display:flex;flex-direction:column;gap:0.4rem}
+.rstep{display:flex;align-items:center;gap:0.6rem;padding:0.55rem 0.8rem;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);border-radius:0.6rem}
+.rstep.active{background:rgba(60,70,200,0.12);border-color:rgba(80,90,255,0.3)}
+.rstep.future{opacity:0.3}
+.rnum{width:1.2rem;height:1.2rem;border-radius:50%;background:rgba(70,80,220,0.2);display:flex;align-items:center;justify-content:center;font-size:0.6rem;flex-shrink:0}
+.rst{font-size:0.7rem}
+
+/* 壁纸 */
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:1rem}
+.pitem{aspect-ratio:1;border-radius:0.4rem;cursor:pointer;transition:all 0.15s;border:2px solid transparent}
+.pitem:hover{border-color:rgba(255,255,255,0.2);transform:scale(1.05)}
+.pitem.on{border-color:#fff}
+.picon{display:flex;flex-direction:column;gap:0.3rem;margin-top:0.8rem}
+.picon-row{display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0.8rem;background:rgba(255,255,255,0.02);border-radius:0.5rem;font-size:0.7rem}
+
+/* 设置 */
+.srow{display:flex;justify-content:space-between;align-items:center;padding:0.55rem 0.7rem;background:rgba(255,255,255,0.02);border-radius:0.4rem;margin-bottom:0.3rem;font-size:0.7rem}
+.srow select,.srow input[type="range"]{background:transparent;border:none;color:var(--text);font-size:0.65rem;outline:none}
+.srow select option{background:#0a0a18}
+.tgl{position:relative;width:2rem;height:1.1rem;background:#1e2840;border-radius:0.55rem;cursor:pointer;transition:0.3s;flex-shrink:0}
+.tgl.on{background:var(--accent-primary)}
+.tgl::after{content:'';position:absolute;top:0.1rem;left:0.1rem;width:0.9rem;height:0.9rem;background:#fff;border-radius:50%;transition:0.3s}
+.tgl.on::after{left:1rem}
+
+/* Toast */
+.toast{
+    position:fixed;bottom:3rem;left:50%;
+    transform:translateX(-50%) translateY(8px);
+    padding:0.4rem 1rem;
+    background:rgba(12,12,22,0.9);
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:1.5rem;font-size:0.6rem;
+    opacity:0;transition:all 0.3s;z-index:200;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+/* ========== 任务规划 ========== */
+.timer-step-desc{
+    font-size:0.65rem;color:var(--text);margin-top:0.5rem;
+    opacity:0;max-width:240px;text-align:center;line-height:1.4;
+    overflow-x:auto;white-space:nowrap;transition:opacity 0.5s;
+    position:relative;z-index:2;padding:0 1rem;
+}
+.timer-step-desc.show{opacity:0.7}
+.plan-panel{padding:0.5rem 0}
+.pstep{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;
+    background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);
+    border-radius:0.5rem;margin-bottom:0.35rem;cursor:pointer;transition:all 0.15s}
+.pstep:hover{border-color:var(--accent-primary);background:rgba(70,80,220,0.08)}
+.pstep.selected{border-color:var(--accent-primary);background:rgba(60,70,200,0.15)}
+.pstep-desc{flex:1;font-size:0.7rem;word-break:break-all;color:var(--text)}
+.pstep-time{font-size:0.6rem;color:var(--muted);white-space:nowrap}
+.pstep-del{width:1.2rem;height:1.2rem;border-radius:50%;
+    background:rgba(255,60,60,0.15);border:1px solid rgba(255,60,60,0.2);
+    color:#ef5555;font-size:0.55rem;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s}
+.pstep-del:hover{background:rgba(255,60,60,0.3)}
+.plan-add{display:flex;gap:0.4rem;margin-top:0.5rem;flex-wrap:wrap}
+.plan-add input{flex:1;min-width:120px;padding:0.45rem 0.8rem;
+    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+    border-radius:1.2rem;color:var(--text);font-size:0.7rem;outline:none}
+.plan-add input:focus{border-color:var(--accent-primary)}
+.plan-add select{padding:0.45rem 0.5rem;background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.06);border-radius:1.2rem;
+    color:var(--text);font-size:0.7rem;outline:none;cursor:pointer}
+.plan-add button{padding:0.45rem 0.8rem;background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.06);border-radius:1.2rem;
+    color:var(--text);font-size:0.7rem;cursor:pointer;transition:all 0.15s}
+.plan-add button:hover{background:rgba(70,80,220,0.2);border-color:var(--accent-primary)}
+.plan-start-btn{width:100%;margin-top:0.7rem;padding:0.55rem;
+    background:rgba(60,70,200,0.25);border:1px solid rgba(80,90,255,0.3);
+    border-radius:0.6rem;color:var(--accent-primary);font-size:0.7rem;
+    cursor:pointer;transition:all 0.15s;text-align:center}
+.plan-start-btn:hover{background:rgba(60,70,200,0.4)}
+
+/* ========== 能量重置 ========== */
+.eopt{padding:0.7rem 1rem;background:rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.06);border-radius:0.6rem;
+    cursor:pointer;transition:all 0.15s;margin-bottom:0.4rem;font-size:0.7rem;color:var(--text)}
+.eopt:hover{border-color:var(--accent-primary);background:rgba(70,80,220,0.1)}
+.eopt:active{transform:scale(0.98)}
+.eopt-skip{text-align:center;margin-top:0.6rem;font-size:0.6rem;color:var(--muted);cursor:pointer;text-decoration:underline;opacity:0.6}
+.eopt-skip:hover{opacity:1}
+
+/* 提醒项（模板+自定义） */
+.rtpl{display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.6rem;
+    background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);
+    border-radius:0.5rem;margin-bottom:0.3rem;cursor:pointer;transition:all 0.15s;font-size:0.7rem}
+.rtpl:hover{border-color:var(--accent-primary)}
+.rtpl.active{border-color:var(--accent-primary);background:rgba(60,70,200,0.12)}
+.rtpl input[type="checkbox"]{accent-color:var(--accent-primary);width:0.9rem;height:0.9rem;cursor:pointer}
+.rtpl-info{flex:1}
+.rtpl-label{color:var(--text);font-weight:500}
+.rtpl-msg{color:var(--muted);font-size:0.6rem;margin-top:0.15rem}
+.rtpl-interval{font-size:0.6rem;color:var(--muted)}
+/* 自定义提醒操作按钮 */
+.rtpl-ops{display:flex;gap:0.25rem;flex-shrink:0}
+.rtpl-op{width:1.3rem;height:1.3rem;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:var(--muted);font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.rtpl-op:hover{background:rgba(255,255,255,0.08);border-color:var(--accent-primary);color:var(--text)}
+.rtpl-op.del:hover{background:rgba(239,68,68,0.2);border-color:#ef5555;color:#ef5555}
+/* 编辑自定义提醒浮层 */
+.edit-reminder-overlay{position:fixed;inset:0;background:rgba(6,6,14,0.97);backdrop-filter:blur(16px);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center}
+.edit-reminder-overlay.show{display:flex}
+.edit-reminder-panel{width:90%;max-width:320px;background:rgba(12,12,22,0.98);border:1px solid rgba(255,255,255,0.08);border-radius:1rem;padding:1.2rem}
+.edit-reminder-panel .panel-title{font-size:0.75rem;color:var(--muted);text-align:center;margin-bottom:1rem;letter-spacing:0.15em}
+.edit-reminder-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem;font-size:0.7rem}
+.edit-reminder-row label{flex-shrink:0;color:var(--muted);width:3rem}
+.edit-reminder-row input{flex:1;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:0.5rem;color:var(--text);font-size:0.7rem;outline:none}
+.edit-reminder-row input:focus{border-color:var(--accent-primary)}
+.edit-reminder-row select{flex:1;padding:0.4rem 0.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:0.5rem;color:var(--text);font-size:0.7rem;outline:none}
+.edit-reminder-btns{display:flex;gap:0.5rem;margin-top:1rem}
+.edit-reminder-btns button{flex:1;padding:0.5rem;border-radius:0.6rem;font-size:0.7rem;cursor:pointer;transition:all 0.15s}
+
+/* 音乐 */
+.musitem{display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;
+    background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);
+    border-radius:0.5rem;margin-bottom:0.25rem;cursor:pointer;transition:all 0.15s;font-size:0.68rem}
+.musitem:hover{border-color:var(--accent-primary);background:rgba(70,80,220,0.08)}
+.musitem.playing{border-color:#3ecf7a;background:rgba(40,180,80,0.1)}
+.musitem input[type="checkbox"]{accent-color:var(--accent-primary);width:0.8rem;height:0.8rem;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="wrap">
+    <!-- 呼吸光效 -->
+    <div class="breathe" id="breathe"></div>
+
+    <!-- 极细进度环 -->
+    <div class="ring">
+        <svg viewBox="0 0 240 240">
+            <circle class="ring-track" cx="120" cy="120" r="114"/>
+            <circle class="ring-progress" id="ring" cx="120" cy="120" r="114"/>
+        </svg>
+    </div>
+
+    <!-- 时钟 -->
+    <div class="clock" id="clock">25:00</div>
+    <div class="mode-text" id="modeText">准备</div>
+    <div class="task-hint" id="taskHint">专注当下</div>
+    <!-- 心流引导文字（可点击区域提示） -->
+    <div class="clock-hint" id="clockHint">点击进入心流 &middot; 双击重置</div>
+    <!-- 步骤描述（计时中横向滚动显示） -->
+    <div class="timer-step-desc" id="timerStepDesc"></div>
+
+    <!-- 控制按钮（小字，角落） -->
+    <div class="ctrl" id="ctrl">
+        <button class="ctrl-btn" onclick="switchToMini()" style="font-size:0.55rem;padding:0.3rem 0.8rem;opacity:0.4">&#x1F5A7;</button>
+    </div>
+</div>
+
+<!-- 底部进度条 -->
+<div class="hbar"><div class="hbar-fill" id="hbarFill"></div></div>
+
+<!-- ========== 迷你沉浸模式 ========== -->
+<div class="mini-mode" id="miniMode">
+    <div class="mini-time" id="miniTime">25:00</div>
+    <div class="mini-state" id="miniState">准备</div>
+    <div class="mini-progress"><div class="mini-fill" id="miniFill"></div></div>
+</div>
+
+<!-- 禅意菜单 -->
+<button class="menu-btn" id="menuBtn" onclick="toggleMenu()">
+    <div class="menu-icon"></div>
+</button>
+<div class="quick-settings" id="quickSettings">
+    <button class="qs-btn" onclick="showP('stats')">&#x1F4CA; 统计</button>
+    <button class="qs-btn" onclick="showP('planning')">&#x1F4CB; 任务</button>
+    <button class="qs-btn" onclick="showP('energy')">&#x26A1; 能量</button>
+    <button class="qs-btn" onclick="showP('reminder')">&#x23F0; 提醒</button>
+    <button class="qs-btn" onclick="showP('settings')">&#x2699; 设置</button>
+    <button class="qs-btn" onclick="launchImmersive()">&#x26F6; 沉浸窗口</button>
+</div>
+
+<!-- 左下角：迷你模式切换按钮（极低对比度，不干扰沉浸感） -->
+<button id="h5MiniToggle" onclick="toggleMiniMode()" style="position:fixed;bottom:1rem;left:1rem;padding:0.35rem 0.7rem;border-radius:1.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:var(--muted);cursor:pointer;z-index:999;transition:all 0.25s;display:flex;align-items:center;justify-content:center;font-size:0.6rem;gap:0.3rem;opacity:0.5" title="迷你模式">&#x1F3A7; <span id="h5MiniToggleText">迷你</span></button>
+
+<!-- ========== 统计（三Tab：数据/图表/历史） ========== -->
+<div class="overlay" id="statsOverlay">
+    <button class="close-btn" onclick="cp('stats')"></button>
+    <div class="panel" style="max-height:85vh;overflow-y:auto">
+        <div class="panel-title">数据统计</div>
+        <!-- Tab导航 -->
+        <div style="display:flex;gap:0.25rem;margin-bottom:0.7rem;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:0.4rem">
+            <button class="qs-btn settings-tab active" onclick="switchStatsTab('data',this)" id="tabData">&#x1F4CA; 数据</button>
+            <button class="qs-btn settings-tab" onclick="switchStatsTab('chart',this)" id="tabChart">&#x1F4C8; 图表</button>
+            <button class="qs-btn settings-tab" onclick="switchStatsTab('history',this)" id="tabHistory">&#x1F4C5; 历史</button>
+        </div>
+
+        <!-- Tab1: 数据（色块卡片） -->
+        <div id="statsTab_data" style="display:flex;flex-direction:column;gap:0.5rem;overflow-y:auto;max-height:calc(85vh - 120px)">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem">
+                <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.25);border-radius:0.5rem;padding:0.6rem;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:600;color:#818cf8" id="sv1">0</div>
+                    <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px" data-lang="statsSessions">完成次数</div>
+                </div>
+                <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.22);border-radius:0.5rem;padding:0.6rem;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:600;color:#34d399" id="sv2">0</div>
+                    <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px" data-lang="statsMinutes">专注分钟</div>
+                </div>
+                <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.22);border-radius:0.5rem;padding:0.6rem;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:600;color:#fbbf24" id="sv3">--</div>
+                    <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px" data-lang="statsScore">专注评分</div>
+                </div>
+                <div style="background:rgba(236,72,153,0.12);border:1px solid rgba(236,72,153,0.22);border-radius:0.5rem;padding:0.6rem;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:600;color:#f472b6" id="sv4">0</div>
+                    <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px" data-lang="statsStreak">连续天数</div>
+                </div>
+                <div style="background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.20);border-radius:0.5rem;padding:0.6rem;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:600;color:#f87171" id="sv5">0</div>
+                    <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px" data-lang="statsDistract">分心次数</div>
+                </div>
+                <div style="background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.22);border-radius:0.5rem;padding:0.6rem;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:600;color:#38bdf8" id="sv6">0</div>
+                    <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px" data-lang="statsDopamine">多巴胺</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab2: 图表（可视化） -->
+        <div id="statsTab_chart" style="display:none;flex-direction:column;gap:1rem;padding:0.4rem 0.2rem">
+            <!-- 本周趋势：SVG柱状图 -->
+            <div>
+                <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:0.7rem;letter-spacing:0.1em">本周趋势（分钟）</div>
+                <svg id="weekSvgChart" width="100%" height="110" viewBox="0 0 280 110" style="overflow:visible;display:block"></svg>
+            </div>
+            <!-- 今日成就 + 评分 并排 -->
+            <div style="display:flex;gap:0.8rem;align-items:center">
+                <!-- 成就进度 -->
+                <div style="flex:1">
+                    <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:0.5rem;letter-spacing:0.1em">今日成就</div>
+                    <div style="display:flex;align-items:center;gap:0.5rem">
+                        <div id="achieveMeter" style="flex:1;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden">
+                            <div id="achieveFill" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#a855f7);border-radius:3px;transition:width 1.2s ease;box-shadow:0 0 6px rgba(99,102,241,0.4)"></div>
+                        </div>
+                        <span id="achievePct" style="font-size:0.8rem;color:#818cf8;min-width:42px;text-align:right;font-weight:500">--</span>
+                    </div>
+                </div>
+                <!-- 专注评分弧形 -->
+                <div id="focusScoreRing" style="flex-shrink:0;display:flex;align-items:center;gap:0.5rem">
+                    <svg width="52" height="52" viewBox="0 0 52 52">
+                        <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
+                        <circle id="scoreRing" cx="26" cy="26" r="21" fill="none" stroke="url(#scoreGrad)" stroke-width="5" stroke-dasharray="131.9 131.9" stroke-dashoffset="131.9" stroke-linecap="round" transform="rotate(-90 26 26)"/>
+                        <defs>
+                            <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#6366f1"/>
+                                <stop offset="100%" stop-color="#a855f7"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div>
+                        <div id="chartScoreVal" style="font-size:1.3rem;font-weight:600;color:#818cf8;line-height:1">--</div>
+                        <div style="font-size:0.55rem;color:#475569">综合评分</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab3: 历史（放宽布局自适应） -->
+        <div id="statsTab_history" style="display:none;padding:0.3rem 0.1rem">
+            <div class="hist" id="hist" style="display:flex;flex-direction:column;gap:0.5rem;overflow-y:auto"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 多巴胺 ========== -->
+<!-- ========== 能量（合并重置功能） ========== -->
+<div class="overlay" id="energyOverlay">
+    <button class="close-btn" onclick="cp('energy')"></button>
+    <div class="panel" style="max-height:85vh;overflow-y:auto">
+        <div class="panel-title">&#x26A1; 能量</div>
+        <!-- Tab导航 -->
+        <div style="display:flex;gap:0.3rem;margin-bottom:0.6rem;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:0.4rem">
+            <button class="qs-btn settings-tab active" onclick="switchEnergyTab('quick',this)" id="tabEq">&#x26A1; 快速能量</button>
+            <button class="qs-btn settings-tab" onclick="switchEnergyTab('reset',this)" id="tabEr">&#x26A0; 紧急重置</button>
+        </div>
+        <!-- 快速能量 Tab -->
+        <div id="energyTab_quick">
+            <div id="energyList"></div>
+        </div>
+        <!-- 紧急重置 Tab -->
+        <div id="energyTab_reset" style="display:none">
+            <div class="rlist" id="resetStepsList"></div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.8rem;justify-content:center">
+                <button class="ctrl-btn" id="resetPrev" onclick="resetStep(-1)" style="display:none">&#x25C0; 上一步</button>
+                <button class="ctrl-btn primary" id="resetNext" onclick="resetStep(1)">&#x25B6; 开始行动</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 任务规划 ========== -->
+<div class="overlay" id="planningOverlay">
+    <button class="close-btn" onclick="cp('planning')"></button>
+    <div class="panel" style="max-height:80vh;overflow-y:auto">
+        <div class="panel-title">任务规划</div>
+        <div id="wizardPlanInfo" style="margin-bottom:0.5rem"></div>
+        <div id="planStepsList" class="plan-panel"></div>
+        <div class="plan-add">
+            <input id="pDescInput" placeholder="任务描述..." onkeydown="if(event.key==='Enter')addPlanStep()">
+            <select id="pMinSelect">
+                <option value="5">5分</option>
+                <option value="10">10分</option>
+                <option value="15">15分</option>
+                <option value="25" selected>25分</option>
+                <option value="30">30分</option>
+                <option value="45">45分</option>
+                <option value="60">60分</option>
+            </select>
+            <button onclick="addPlanStep()">&#x2795;</button>
+        </div>
+        <div class="plan-start-btn" id="planStartBtn" onclick="startFromPlanStep()">&#x25B6; 选中步骤开始专注</div>
+    </div>
+</div>
+
+<!-- ========== 能量重置 ========== -->
+<div class="overlay" id="energyResetOverlay">
+    <div class="panel" style="text-align:center;max-width:380px">
+        <div class="panel-title">专注前能量重置</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:0.8rem">选择一个方式快速恢复能量，再开始专注</div>
+        <div id="energyOpts"></div>
+        <div id="energyCountdown" style="display:none;margin-top:1rem">
+            <div class="clock" id="energyClock" style="font-size:2.5rem">00:00</div>
+            <div style="font-size:0.65rem;color:var(--muted);margin-top:0.5rem;line-height:1.6" id="energyPrompt"></div>
+            <div class="eopt-skip" onclick="skipEnergyReset()">跳过，直接开始专注 &gt;&gt;</div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ========== 提醒 ========== -->
+<div class="overlay" id="reminderOverlay">
+    <button class="close-btn" onclick="cp('reminder')"></button>
+    <div class="panel" style="max-height:80vh;overflow-y:auto">
+        <div class="panel-title">健康提醒</div>
+        <div id="wizardReminderInfo" style="margin-bottom:0.5rem"></div>
+        <div class="srow"><span>开启提醒</span><div class="tgl" id="rToggle" onclick="toggleReminder()"></div></div>
+        <div class="panel-title" style="margin-top:0.8rem;font-size:0.6rem;opacity:0.5">提醒模板（可多选）</div>
+        <div id="rTemplates"></div>
+        <div class="panel-title" style="margin-top:0.8rem;font-size:0.6rem;opacity:0.5">提醒间隔</div>
+        <div class="srow"><span>每</span>
+            <input type="number" id="rInterval" min="1" max="240" value="30" onchange="saveReminderSettings()" style="width:64px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:var(--text);border-radius:0.4rem;padding:0.2rem 0.4rem" list="intervalList">
+            <datalist id="intervalList">
+                <option value="15">15分钟</option>
+                <option value="20">20分钟</option>
+                <option value="25">25分钟</option>
+                <option value="30">30分钟</option>
+                <option value="40">40分钟</option>
+                <option value="45">45分钟</option>
+                <option value="60">60分钟</option>
+                <option value="90">90分钟</option>
+            </datalist>
+            <span>提醒一次</span>
+        </div>
+        <div class="panel-title" style="margin-top:0.8rem;font-size:0.6rem;opacity:0.5">自定义提醒</div>
+        <div class="srow" style="flex-direction:column;align-items:flex-start;gap:0.3rem">
+            <input id="rCustomMsg" placeholder="输入自定义提醒内容..." style="width:100%;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:0.4rem;color:var(--text);font-size:0.7rem">
+            <div style="display:flex;gap:0.4rem;align-items:center;width:100%">
+                <span style="font-size:0.6rem;color:var(--muted);white-space:nowrap">间隔</span>
+                <input type="number" id="rCustomInterval" min="1" max="240" value="30" style="width:60px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:var(--text);border-radius:0.4rem;padding:0.2rem 0.35rem;font-size:0.65rem">
+                <span style="font-size:0.6rem;color:var(--muted)">分钟</span>
+            </div>
+            <button class="ctrl-btn" onclick="addCustomReminder()" style="font-size:0.65rem;padding:0.35rem 0.8rem">&#x2795; 添加提醒</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 编辑自定义提醒浮层 ========== -->
+<div class="edit-reminder-overlay" id="editReminderOverlay">
+    <div class="edit-reminder-panel">
+        <div class="panel-title" id="editReminderTitle">&#x270F; 编辑提醒</div>
+        <input type="hidden" id="editReminderId">
+        <div class="edit-reminder-row">
+            <label>名称</label>
+            <input id="editReminderLabel" placeholder="提醒名称，如：喝水">
+        </div>
+        <div class="edit-reminder-row">
+            <label>内容</label>
+            <input id="editReminderMsg" placeholder="提醒内容，如：起身倒杯水">
+        </div>
+        <div class="edit-reminder-row">
+            <label>间隔</label>
+            <input type="number" id="editReminderInterval" min="1" max="240" value="30" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:var(--text);border-radius:0.4rem;padding:0.2rem 0.35rem;font-size:0.65rem" list="editIntervalList">
+            <datalist id="editIntervalList">
+                <option value="15">15分钟</option>
+                <option value="20">20分钟</option>
+                <option value="25">25分钟</option>
+                <option value="30">30分钟</option>
+                <option value="40">40分钟</option>
+                <option value="45">45分钟</option>
+                <option value="60">60分钟</option>
+                <option value="90">90分钟</option>
+            </datalist>
+        </div>
+        <div class="edit-reminder-btns">
+            <button onclick="closeEditReminder()" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--muted)">取消</button>
+            <button onclick="confirmEditReminder()" style="background:rgba(70,80,220,0.25);border:1px solid rgba(80,90,255,0.3);color:var(--accent-primary)">&#x2705; 保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 提醒弹窗（计时中触发） ========== -->
+<div class="overlay" id="reminderPopupOverlay" style="background:rgba(8,8,16,0.85)">
+    <div class="panel" style="text-align:center;max-width:360px">
+        <div class="panel-title" style="color:var(--accent-primary)">&#x23F0; 提醒</div>
+        <div style="font-size:2.5rem;margin:0.8rem 0">&#x1F4A7;</div>
+        <div style="font-size:0.9rem;line-height:1.7;color:var(--text)" id="rPopupMsg"></div>
+        <!-- 展开详情按钮（多条提醒时显示） -->
+        <div id="reminderDetailToggle" style="display:none;margin:0.5rem 0">
+            <button class="qs-btn" id="toggleReminderDetailBtn" onclick="toggleReminderDetail()" style="font-size:0.75rem;padding:0.3rem 0.8rem">
+                &#x25BC; 查看全部提醒
+            </button>
+        </div>
+        <div id="reminderDetailList" style="display:none;margin:0.5rem 0;text-align:left;font-size:0.78rem;color:var(--muted);max-height:140px;overflow-y:auto;padding:0.4rem;background:rgba(255,255,255,0.04);border-radius:6px;line-height:1.8"></div>
+        <button class="ctrl-btn primary" onclick="dismissReminderPopup()" style="margin-top:0.8rem;width:100%">&#x2705; 好的，去做</button>
+    </div>
+</div>
+
+<!-- ========== 设置 ========== -->
+<div class="overlay" id="settingsOverlay">
+    <button class="close-btn" onclick="cp('settings')"></button>
+    <div class="panel" style="max-width:560px;max-height:85vh;overflow-y:auto">
+        <!-- Tab 导航 -->
+        <div style="display:flex;gap:0.3rem;margin-bottom:0.8rem;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:0.5rem">
+            <button class="qs-btn settings-tab active" onclick="switchSettingsTab('music',this)" id="tabMusic">&#x1F3B5; 音乐</button>
+            <button class="qs-btn settings-tab" onclick="switchSettingsTab('wallpaper',this)" id="tabWallpaper">&#x1F4C7; 壁纸</button>
+            <button class="qs-btn settings-tab" onclick="switchSettingsTab('personalize',this)" id="tabPersonalize">&#x2728; 个性化</button>
+        </div>
+
+        <!-- 音乐 Tab -->
+        <div id="settingsTab_music">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem">
+                <div style="font-size:0.65rem;color:var(--muted)">&#x1F3B5; 选择音乐</div>
+                <button class="ctrl-btn" onclick="cp('settings')" style="font-size:0.55rem;padding:0.2rem 0.5rem">&#x2716; 关闭</button>
+            </div>
+            <div id="musicList" style="margin-top:0.2rem;max-height:200px;overflow-y:auto"></div>
+            <div style="display:flex;gap:0.4rem;margin-top:0.5rem;flex-wrap:wrap">
+                <button class="ctrl-btn" id="musicLoopBtn" onclick="setMusicMode('loop')" style="font-size:0.6rem;padding:0.3rem 0.6rem">&#x1F502; 单曲循环</button>
+                <button class="ctrl-btn" id="musicShuffleBtn" onclick="setMusicMode('shuffle')" style="font-size:0.6rem;padding:0.3rem 0.6rem">&#x1F500; 全部随机</button>
+            </div>
+            <!-- 本地音乐目录输入 -->
+            <div style="font-size:0.6rem;color:var(--muted);margin-top:0.6rem">&#x1F4C1; 本地音乐目录路径</div>
+            <div id="musicDirPath" style="font-size:0.55rem;color:var(--accent-primary);margin:0.2rem 0 0.4rem;word-break:break-all;opacity:0.8"></div>
+            <div style="display:flex;gap:0.4rem;width:100%;align-items:center">
+                <input id="musicDirInput" placeholder="输入目录路径，如 Z:\音乐\我的歌曲" onkeydown="if(event.key==='Enter')saveMusicDir()" style="flex:1;padding:0.35rem 0.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:0.4rem;color:var(--text);font-size:0.65rem">
+                <button class="ctrl-btn" onclick="saveMusicDir()" style="font-size:0.6rem;padding:0.35rem 0.5rem">&#x2705; 保存</button>
+            </div>
+            <button class="ctrl-btn" onclick="loadMusicFromDir()" style="font-size:0.6rem;padding:0.35rem 0.5rem;width:100%;margin-top:0.3rem">&#x21BA; 加载目录音乐</button>
+            <input type="file" id="musicFileInput" accept="audio/*" multiple style="display:none" onchange="handleMusicFiles(this.files)">
+            <button class="ctrl-btn" onclick="document.getElementById('musicFileInput').click()" style="font-size:0.6rem;padding:0.35rem 0.5rem;width:100%;margin-top:0.4rem">&#x2795; 添加音乐文件（单选/多选）</button>
+        </div>
+
+        <!-- 壁纸 Tab -->
+        <div id="settingsTab_wallpaper" style="display:none">
+            <div style="font-size:0.6rem;color:var(--muted);margin-bottom:0.5rem">点击选择背景颜色</div>
+            <div class="pgrid" id="settingsPgrid" style="grid-template-columns:repeat(8,1fr)"></div>
+            <div class="picon" style="margin-top:0.8rem">
+                <div class="picon-row">
+                    <span>&#x1F5C7; 桌面图标</span>
+                    <div class="tgl" id="iToggle2" onclick="tIcons()"></div>
+                </div>
+                <div style="font-size:0.55rem;color:var(--muted);margin-top:0.3rem">点击切换桌面图标显示/隐藏</div>
+            </div>
+            <div style="text-align:center;margin-top:0.5rem;font-size:0.55rem;color:var(--muted);opacity:0.6">单击开始/暂停 · 双击重置</div>
+            <button class="qs-btn" style="width:100%;margin-top:0.6rem;background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:#f87171" onclick="restoreAll()">&#x1F504; 恢复全部默认（清空配置，保留历史）</button>
+        </div>
+
+        <!-- 个性化 Tab -->
+        <div id="settingsTab_personalize" style="display:none">
+            <div class="panel-title" style="font-size:0.6rem;opacity:0.5;margin-bottom:0.3rem">背景主题</div>
+            <div id="bgGrid" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.8rem"></div>
+            <div class="panel-title" style="margin-top:0.6rem;font-size:0.6rem;opacity:0.5">时间字体</div>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;margin-top:0.3rem">
+                <div class="qs-btn" onclick="setTimeFont('Consolas',this)" style="text-align:left;font-family:Consolas">Consolas 等宽</div>
+                <div class="qs-btn" onclick="setTimeFont('Courier New',this)" style="text-align:left;font-family:'Courier New'">Courier New 等宽</div>
+                <div class="qs-btn" onclick="setTimeFont('monospace',this)" style="text-align:left;font-family:monospace">System Monospace</div>
+                <div class="qs-btn" onclick="setTimeFont('Georgia',this)" style="text-align:left;font-family:Georgia">Georgia 衬线</div>
+            </div>
+            <div class="panel-title" style="margin-top:0.6rem;font-size:0.6rem;opacity:0.5">时间大小</div>
+            <div class="srow"><span>字体</span>
+                <select id="psTimeSize" onchange="applyPersonalize()">
+                    <option value="3rem">小</option>
+                    <option value="4rem" selected>中</option>
+                    <option value="5rem">大</option>
+                    <option value="6rem">超大</option>
+                </select>
+                <span style="font-size:0.55rem;color:var(--muted);margin-left:0.3rem">适用于时钟和迷你模式</span>
+            </div>
+            <div class="panel-title" style="margin-top:0.6rem;font-size:0.6rem;opacity:0.5">整体亮度</div>
+            <div class="srow"><span>亮度</span>
+                <select id="psBrightness">
+                    <option value="0.7">暗</option>
+                    <option value="0.85" selected>适中</option>
+                    <option value="1">亮</option>
+                </select>
+            </div>
+            <div class="panel-title" style="margin-top:0.6rem;font-size:0.6rem;opacity:0.5">强调色</div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.3rem;justify-content:center">
+                <div class="pitem" onclick="setAccent('#6366f1','#a855f7',this)" title="紫蓝" style="background:linear-gradient(135deg,#6366f1,#a855f7);width:32px;height:32px"></div>
+                <div class="pitem" onclick="setAccent('#3b82f6','#06b6d4',this)" title="科技蓝" style="background:linear-gradient(135deg,#3b82f6,#06b6d4);width:32px;height:32px"></div>
+                <div class="pitem" onclick="setAccent('#22c55e','#84cc16',this)" title="清新绿" style="background:linear-gradient(135deg,#22c55e,#84cc16);width:32px;height:32px"></div>
+                <div class="pitem" onclick="setAccent('#f97316','#facc15',this)" title="暖橙" style="background:linear-gradient(135deg,#f97316,#facc15);width:32px;height:32px"></div>
+                <div class="pitem" onclick="setAccent('#ec4899','#8b5cf6',this)" title="粉紫" style="background:linear-gradient(135deg,#ec4899,#8b5cf6);width:32px;height:32px"></div>
+                <div class="pitem" onclick="setAccent('#e2e8f0','#94a3b8',this)" title="纯白" style="background:linear-gradient(135deg,#e2e8f0,#94a3b8);width:32px;height:32px"></div>
+            </div>
+            <button class="ctrl-btn primary" onclick="applyPersonalize()" style="width:100%;margin-top:0.8rem">&#x2728; 应用个性化</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 首次专注模板引导浮层 ========== -->
+<div class="overlay" id="wizardOverlay">
+    <div class="panel" style="text-align:center;max-width:360px">
+        <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:0.3rem;letter-spacing:0.15em">&#x23F0; 专注模板</div>
+        <div style="font-size:0.95rem;color:#dde4f0;margin-bottom:0.8rem">选择你的专注模式</div>
+
+        <!-- Tab：预设模板 / 自定义 -->
+        <div style="display:flex;gap:0.3rem;margin-bottom:0.7rem;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:0.4rem">
+            <button class="qs-btn settings-tab active" onclick="switchWizardTab('preset',this)" id="wizTabPreset">&#x25B6; 预设模板</button>
+            <button class="qs-btn settings-tab" onclick="switchWizardTab('custom',this)" id="wizTabCustom">&#x2699; 自定义</button>
+        </div>
+
+        <!-- 预设模板列表 -->
+        <div id="wizPresetPanel" style="text-align:left;margin-bottom:0.8rem">
+            <div id="wizardTemplates"></div>
+        </div>
+
+        <!-- 自定义模板表单 -->
+        <div id="wizCustomPanel" style="display:none;margin-bottom:0.8rem">
+            <div class="srow"><span>专注时长</span>
+                <select id="wizFocusDur">
+                    <option value="25">25分钟</option>
+                    <option value="40" selected>40分钟</option>
+                    <option value="50">50分钟</option>
+                    <option value="60">60分钟</option>
+                    <option value="90">90分钟</option>
+                </select>
+            </div>
+            <div class="srow"><span>休息时长</span>
+                <select id="wizBreakDur">
+                    <option value="5">5分钟</option>
+                    <option value="3">3分钟</option>
+                    <option value="10">10分钟</option>
+                    <option value="15">15分钟</option>
+                </select>
+            </div>
+            <div class="srow"><span>提醒间隔</span>
+                <select id="wizRemindInterval">
+                    <option value="15">15分钟</option>
+                    <option value="20" selected>20分钟</option>
+                    <option value="25">25分钟</option>
+                    <option value="30">30分钟</option>
+                </select>
+            </div>
+            <div class="srow" style="flex-direction:column;align-items:flex-start;gap:0.2rem">
+                <span style="font-size:0.65rem;color:#94a3b8">提醒内容（可选）</span>
+                <input id="wizRemindMsg" placeholder="如：喝水、眨眼、起身活动..." style="width:100%;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:0.5rem;color:#dde4f0;font-size:0.7rem">
+            </div>
+        </div>
+
+        <!-- 选中预览 -->
+        <div id="wizPreview" style="display:none;padding:0.6rem 0.8rem;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:0.5rem;margin-bottom:0.8rem;text-align:left">
+            <div style="font-size:0.65rem;color:#818cf8;margin-bottom:0.3rem;font-weight:500">&#x2713; 已选择</div>
+            <div id="wizPreviewContent" style="font-size:0.7rem;color:#94a3b8;line-height:1.7"></div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem">
+            <button class="ctrl-btn" onclick="skipWizard()" style="flex:1;opacity:0.6;font-size:0.65rem">跳过</button>
+            <button class="ctrl-btn primary" id="wizardConfirmBtn" onclick="confirmWizard()" style="flex:1;font-size:0.75rem">&#x2705; 开始专注</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- 迷你模式退出按钮（已移至左下角统一按钮，此处隐藏） -->
+
+<script>
+const API = 'http://localhost:8765';
+let running = false, interval = null, left = 25*60, dur = 25;
+let rstIdx = 0, rstSteps = [
+    "停止 (30秒) - 手离开键盘",
+    "呼吸 (30秒) - 3次深呼吸",
+    "提问 (1分钟) - '我正在逃避什么？'",
+    "缩小 (1分钟) - 把任务缩小10倍",
+    "承诺 (30秒) - '我只做5分钟'",
+    "开始 - 从最小的任务开始",
+], curPreset = 'minimal';
+let actx = null, gain = null, oscs = [];
+
+function toast(m){
+    const t=document.getElementById('toast');
+    t.textContent=m;t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),2000);
+}
+
+function tick(){
+    const m=Math.floor(left/60),s=left%60;
+    const clk=document.getElementById('clock');
+    if(clk)clk.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    const prog=document.getElementById('ring');
+    if(prog)prog.style.strokeDashoffset=716*(1-left/(dur*60));
+    const hb=document.getElementById('hbarFill');
+    if(hb)hb.style.width=(1-left/(dur*60))*100+'%';
+    if(left<=0){completeT();return;}
+    left--;
+    // 提醒检查：每个interval只触发一次（扩大窗口到3秒，防止漏掉）
+    if(running && reminderState.enabled && left > 0){
+        const iv = reminderState.intervalMinutes;
+        const targetLeft = iv * 60;
+        // 用3秒窗口检查（防止因setInterval抖动漏掉）
+        if((left === targetLeft || left === targetLeft - 1 || left === targetLeft - 2) && !_triggeredIntervals.has(iv)){
+            _triggeredIntervals.add(iv);
+            triggerReminder();
+        }
+    }
+    // 同步迷你模式显示
+    if(miniMode) syncMiniDisplay();
+}
+
+async function startT(){
+    if(running)return;
+    // 优先使用选中的步骤，否则使用设置
+    if(selectedStepIdx >= 0 && planSteps[selectedStepIdx]){
+        const step = planSteps[selectedStepIdx];
+        currentStepDesc = step.description;
+        dur = step.minutes;
+        left = dur * 60;
+        // >=25分钟：弹出能量重置
+        if(dur >= 25){
+            showEnergyReset(function(){
+                startTimerCore();
+            });
+            return;
+        }
+    }
+    startTimerCore();
+}
+
+function startTimerCore(){
+    const task = currentStepDesc || document.getElementById('taskHint').textContent || '专注';
+    const durEl = document.getElementById('ss1');
+    const parsed = parseInt(durEl ? durEl.value : null);
+    dur = parsed > 0 ? parsed : dur;
+    fetch(API+'/api/pomodoro/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task,planned_minutes:dur})}).catch(e=>{});
+    left = dur * 60; running = true;
+    const mt = document.getElementById('modeText'), clk = document.getElementById('clock'), th = document.getElementById('taskHint'), ch = document.getElementById('clockHint'), td = document.getElementById('timerStepDesc');
+    if(mt){mt.textContent='专注';mt.style.color='rgba(100,120,255,0.8)';}
+    if(clk){clk.textContent=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');clk.classList.add('running');}
+    if(th)th.classList.remove('show');
+    if(ch){ch.textContent='🎯沉浸心流💖链接自我☯️';ch.classList.add('show');}
+    if(td && currentStepDesc){td.textContent = currentStepDesc; td.classList.add('show');}
+    interval = setInterval(tick, 1000);
+    document.getElementById('breathe').style.animationDuration = '2s';
+    loadStats(); // 启动时刷新统计
+    // 自动进入紧凑模式（缩小窗口）
+    fetch(API+'/api/window/move?mode=compact',{method:'POST'}).catch(e=>{});
+    const eb = document.getElementById('qsExpandBtn');
+    if(eb) eb.style.display = 'inline-block';
+}
+
+function pauseT(){
+    running=false;clearInterval(interval);
+    checkEmergencyTrigger('pause');
+    const mt=document.getElementById('modeText'),clk=document.getElementById('clock'),ch=document.getElementById('clockHint');
+    if(mt){mt.textContent='暂停';mt.style.color='';}
+    if(clk)clk.classList.remove('running');
+    if(ch){ch.textContent='重新连接 · 点击继续';ch.classList.add('show');}
+}
+
+async function stopT(){
+    running=false;clearInterval(interval);
+    try{await fetch(API+'/api/pomodoro/abort',{method:'POST'});}catch(e){}
+    resetT();loadStats();try{await fetch(API+'/api/desktop/icons/show',{method:'POST'});}catch(e){}
+    toast('已停止');
+}
+
+async function completeT(){
+    running=false;clearInterval(interval);
+    try{await fetch(API+'/api/pomodoro/complete',{method:'POST'});}catch(e){}
+    const clk=document.getElementById('clock'),mt=document.getElementById('modeText');
+    if(clk){clk.classList.remove('running');clk.classList.add('done');setTimeout(()=>clk.classList.remove('done'),1500);}
+    if(mt){mt.textContent='突破';mt.style.color='#3ecf7a';}
+    const ch=document.getElementById('clockHint');
+    if(ch){ch.textContent='休息片刻 · 点击继续';ch.classList.add('show');}
+    toast('专注完成!');
+    resetT();loadStats();
+    try{await fetch(API+'/api/desktop/icons/show',{method:'POST'});}catch(e){}
+    if(miniMode) syncMiniDisplay();
+}
+
+function resetT(){
+    const el=document.getElementById('ss1');
+    const p=parseInt(el?el.value:null);
+    dur=p>0?p:25;
+    left=dur*60;running=false;
+    _triggeredIntervals.clear(); // 重置已触发interval标记
+    const clk=document.getElementById('clock');
+    if(clk)clk.textContent=String(Math.floor(left/60)).padStart(2,'0')+':00';
+    const rg=document.getElementById('ring');
+    if(rg)rg.style.strokeDashoffset=716;
+    const hb=document.getElementById('hbarFill');
+    if(hb)hb.style.width='0%';
+    const mt=document.getElementById('modeText');
+    if(mt){mt.textContent='准备';mt.style.color='';}
+    const th=document.getElementById('taskHint');
+    if(th)th.classList.add('show');
+    const ch=document.getElementById('clockHint');
+    if(ch){ch.textContent='点击进入心流 · 双击重置';ch.classList.add('show');}
+    const br=document.getElementById('breathe');
+    if(br)br.style.animationDuration='4s';
+    // 清除步骤状态
+    currentStepDesc = '';
+    selectedStepIdx = -1;
+    const td = document.getElementById('timerStepDesc');
+    if(td){td.textContent='';td.classList.remove('show');}
+    // 还原扩展按钮
+    const eb = document.getElementById('qsExpandBtn');
+    if(eb) eb.style.display = 'none';
+    if(miniMode) syncMiniDisplay();
+}
+
+function toggleMenu(){document.getElementById('quickSettings').classList.toggle('show');}
+document.addEventListener('click',e=>{
+    if(!e.target.closest('#menuBtn')&&!e.target.closest('.quick-settings'))document.getElementById('quickSettings').classList.remove('show');
+});
+
+function showP(n){toggleMenu();document.getElementById(n+'Overlay').classList.add('show');if(n==='stats')loadStats();if(n==='energy'){loadEnergyQuick();loadResetSteps();switchEnergyTab('quick',document.getElementById('tabEq'));}if(n==='planning')loadPlan();if(n==='reminder')loadReminder();if(n==='settings'){loadMusicList();loadBgGrid();loadSettingsPgrid();switchSettingsTab('music',document.getElementById('tabMusic'));}}
+function cp(n){document.getElementById(n+'Overlay').classList.remove('show');}
+
+function switchStatsTab(tab,btn){
+    ['data','chart','history'].forEach(t=>{
+        document.getElementById('statsTab_'+t).style.display='none';
+    });
+    // 每个Tab使用各自的显示模式
+    const displayMap={'data':'flex','chart':'flex','history':'block'};
+    const el=document.getElementById('statsTab_'+tab);
+    if(el)el.style.display=displayMap[tab]||'flex';
+    document.querySelectorAll('#statsOverlay .settings-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+async function loadStats(){
+    // 先显示模拟骨架数据（图表视觉效果）
+    _initStatsSkeleton();
+    try{
+        const[sRes,sessRes]=await Promise.all([fetch(API+'/api/stats'),fetch(API+'/api/sessions?limit=10')]);
+        const s=await sRes.json(),sess=await sessRes.json();
+        document.getElementById('sv1').textContent=s.today?.sessions||0;
+        document.getElementById('sv2').textContent=s.total_focus_minutes||0;
+        document.getElementById('sv3').textContent=s.adhd_focus_score||'--';
+        document.getElementById('sv4').textContent=s.streak_days||0;
+        document.getElementById('sv5').textContent=s.today?.distractions||0;
+        document.getElementById('sv6').textContent=s.today?.breaks||0;
+        // 图表：本周SVG柱状图
+        const weekDays=['mon','tue','wed','thu','fri','sat','sun'];
+        const today=new Date().getDay()||7;
+        const weekMins=weekDays.map((_,i)=>{
+            const d=new Date();d.setDate(d.getDate()-(today-i-1));
+            const key=d.toISOString().slice(0,10);
+            return s.daily_stats?.[key]?.focus_minutes||0;
+        });
+        const maxM=Math.max(...weekMins,1);
+        const svg=document.getElementById('weekSvgChart');
+        if(svg){
+            const W=280,H=100,bH=80;
+            const bars=weekMins.map((m,i)=>{
+                const barH=Math.max(3,m/maxM*bH);
+                const x=10+i*(W-20)/7;
+                const y=H-8-barH;
+                const isToday=i===weekDays.length-1;
+                const gradId='bg'+i;
+                const valText=m>0?`<text x="${x+(W-20)/14-2}" y="${y-4}" text-anchor="middle" font-size="9" fill="#818cf8" font-weight="500">${m}</text>`:'';
+                return `<rect x="${x}" y="${y}" width="${(W-20)/7-6}" height="${barH}" rx="3" ry="3" fill="${isToday?'url(#barGrad)':'rgba(99,102,241,0.4)'}" opacity="${isToday?1:0.8}"/>`+valText;
+            }).join('');
+            const labels=['一','二','三','四','五','六','日'].map((l,i)=>{
+                const x=10+i*(W-20)/7+(W-20)/14-2;
+                return `<text x="${x}" y="${H}" text-anchor="middle" font-size="9" fill="#475569">${l}</text>`;
+            }).join('');
+            svg.innerHTML=`<defs><linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs><g>${bars}</g><g>${labels}</g>`;
+        }
+        // 成就感
+        const achieve=Math.min(1,s.completion_rate||0);
+        document.getElementById('achieveFill').style.width=(achieve*100).toFixed(0)+'%';
+        document.getElementById('achievePct').textContent=(achieve*100).toFixed(0)+'%';
+        // 专注评分弧形
+        const score=parseFloat(s.adhd_focus_score)||0;
+        const scoreRing=document.getElementById('scoreRing');
+        const scoreVal=document.getElementById('chartScoreVal');
+        if(scoreRing){const circ=131.9*(1-score/100);scoreRing.style.strokeDashoffset=Math.max(0,Math.min(131.9,circ));}
+        if(scoreVal)scoreVal.textContent=score>0?score:'--';
+        // 历史：放宽卡片布局
+        const he=document.getElementById('hist');
+        if(!sess||sess.length===0){he.innerHTML='<div style="text-align:center;color:#475569;padding:1.5rem;font-size:0.7rem">暂无记录</div>';return;}
+        he.innerHTML=sess.map(x=>{
+            const planned=x.planned_minutes||25;
+            const actual=Math.round((x.actual_minutes)||0);
+            const pct=Math.min(100,Math.round(actual/planned*100));
+            const done=x.completed;
+            const dotColor=done?'#6366f1':'#ef4444';
+            const statusTxt=done?'完成':'中止';
+            const statusBg=done?'rgba(99,102,241,0.18)':'rgba(239,68,68,0.12)';
+            return `<div class="hitem ${done?'done':'fail'}">
+                <div style="flex:1;min-width:0">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                        <span style="color:#dde4f0;font-size:0.72rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.task||'专注'}</span>
+                        <span style="font-size:0.6rem;padding:2px 8px;border-radius:10px;background:${statusBg};color:${dotColor};flex-shrink:0;margin-left:0.5rem">${statusTxt}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.5rem">
+                        <div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px">
+                            <div style="height:100%;width:${pct}%;background:${dotColor};border-radius:2px;transition:width 0.5s"></div>
+                        </div>
+                        <span style="font-size:0.65rem;color:#94a3b8;white-space:nowrap">${actual}/${planned}m</span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }catch(e){document.getElementById('sv1').textContent='-';}
+}
+
+function _initStatsSkeleton(){
+    // SVG柱状图骨架（初始化时显示视觉效果）
+    const sim=[25,0,40,15,0,60,30];
+    const svg=document.getElementById('weekSvgChart');
+    if(svg){
+        const maxV=Math.max(...sim,1);
+        const W=280,H=100,bH=80;
+        const bars=sim.map((m,i)=>{
+            const barH=Math.max(3,m/maxV*bH);
+            const x=10+i*(W-20)/7;
+            const y=H-8-barH;
+            const isToday=i===6;
+            return `<rect x="${x}" y="${y}" width="${(W-20)/7-6}" height="${barH}" rx="3" ry="3" fill="${isToday?'url(#skGrad)':'rgba(99,102,241,0.35)'}" opacity="${isToday?1:0.75}"/>`;
+        }).join('');
+        const labels=['一','二','三','四','五','六','日'].map((l,i)=>{
+            const x=10+i*(W-20)/7+(W-20)/14-2;
+            return `<text x="${x}" y="${H}" text-anchor="middle" font-size="9" fill="#475569">${l}</text>`;
+        }).join('');
+        svg.innerHTML=`<defs><linearGradient id="skGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs><g>${bars}</g><g>${labels}</g>`;
+    }
+    const fill=document.getElementById('achieveFill');
+    if(fill){fill.style.width='0%';fill.style.background='linear-gradient(90deg,#6366f1,#a855f7)';}
+    const pct=document.getElementById('achievePct');
+    if(pct)pct.textContent='--';
+    const scoreRing=document.getElementById('scoreRing');
+    if(scoreRing)scoreRing.style.strokeDashoffset='131.9';
+    const scoreVal=document.getElementById('chartScoreVal');
+    if(scoreVal)scoreVal.textContent='--';
+}
+
+async function loadM(){
+    // 微步骤从规划数据中读取，共用planSteps
+    try{
+        const r = await fetch(API+'/api/planning/today');
+        const d = await r.json();
+        planSteps = d.steps || [];
+        renderMicroList();
+    }catch(e){ renderMicroList(); }
+}
+// ========== 能量功能 ==========
+const ENERGY_ITEMS = [
+    {id:'stretch',  label:'拉伸',     icon:'&#x1F9C4;', seconds:60,  prompt:'伸展双臂，活动颈椎腰部'},
+    {id:'eye',      label:'眼保健操', icon:'&#x1F440;', seconds:30,  prompt:'闭眼休息，转动眼球'},
+    {id:'breathe',  label:'深呼吸',   icon:'&#x1F637;', seconds:60,  prompt:'吸气4秒，屏住4秒，呼气6秒'},
+    {id:'walk',     label:'走动一下', icon:'&#x1F6B6;', seconds:120, prompt:'起身走动1-2分钟'},
+    {id:'water',    label:'喝水',     icon:'&#x1F4A7;', seconds:30,  prompt:'起身倒杯水，小口慢饮'},
+];
+let energyCountdown = null;
+
+async function loadEnergyQuick(){
+    const el = document.getElementById('energyList');
+    if(!el) return;
+    el.innerHTML = ENERGY_ITEMS.map(e=>`
+        <div class="ditem" onclick="doEnergy('${e.id}')">
+            <div class="dname">${e.icon} ${e.label} <span style="color:var(--muted);font-size:0.6rem">(${e.seconds}秒)</span></div>
+            <div class="ddesc">${e.prompt}</div>
+        </div>
+    `).join('');
+}
+
+async function doEnergy(id){
+    const item = ENERGY_ITEMS.find(e=>e.id===id);
+    if(!item) return;
+    const el = document.getElementById('energyList');
+    el.innerHTML = `<div style="text-align:center;padding:1rem"><div class="clock" id="eClock" style="font-size:3rem">${item.seconds}</div><div style="font-size:0.7rem;color:var(--muted);margin-top:0.5rem">${item.label} - ${item.prompt}</div><div style="margin-top:1rem"><button class="ctrl-btn" onclick="cancelEnergy()" style="margin-right:0.5rem">取消</button><button class="ctrl-btn primary" onclick="confirmEnergy('${item.id}')">完成</button></div></div>`;
+    let left = item.seconds;
+    energyCountdown = setInterval(()=>{
+        const clk = document.getElementById('eClock');
+        if(clk) clk.textContent = left;
+        if(left <= 0){ clearInterval(energyCountdown); confirmEnergy(id); return; }
+        left--;
+    }, 1000);
+}
+function cancelEnergy(){ clearInterval(energyCountdown); loadEnergyQuick(); }
+
+async function confirmEnergy(id){
+    clearInterval(energyCountdown);
+    const item = ENERGY_ITEMS.find(e=>e.id===id);
+    if(!item) return;
+    try{ await fetch(API+'/api/energy/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:id,label:item.label,seconds:item.seconds,completed:true,ts:Date.now()})}); }catch(e){}
+    toast(item.label + ' 完成！');
+    loadEnergyQuick();
+    cp('energy');
+}
+
+// ========== 紧急重置（合并后的Tab） ==========
+function switchEnergyTab(tab, btn){
+    document.querySelectorAll('#tabEq,#tabEr').forEach(b=>b.classList.remove('active'));
+    if(btn) btn.classList.add('active');
+    document.getElementById('energyTab_quick').style.display = tab==='quick'?'block':'none';
+    document.getElementById('energyTab_reset').style.display = tab==='reset'?'block':'none';
+    if(tab==='reset') loadResetSteps();
+}
+
+async function loadResetSteps(){
+    rstIdx = 0;
+    const DEFAULT_PROTOCOL = [
+        "停止 (30秒) - 手离开键盘",
+        "呼吸 (30秒) - 3次深呼吸",
+        "提问 (1分钟) - '我正在逃避什么？'",
+        "缩小 (1分钟) - 把任务缩小10倍",
+        "承诺 (30秒) - '我只做5分钟'",
+        "开始 - 从最小的任务开始",
+    ];
+    // 1. localStorage 立即读取并渲染
+    try{
+        const raw = localStorage.getItem('flow_emergency_reset');
+        if(raw){
+            const c = JSON.parse(raw);
+            if(c.data && c.data.length > 0) { rstSteps = c.data; renderResetSteps(); }
+        }
+    }catch(e){}
+    // 2. API 异步拉取 → 指纹比对 → 不同则覆盖
+    try{
+        const r = await fetch(API+'/api/adhd/emergency-reset');
+        const d = await r.json();
+        const newSteps = (d.protocol && d.protocol.length > 0) ? d.protocol : DEFAULT_PROTOCOL;
+        const apiFp = JSON.stringify(newSteps);
+        let lsFp = '';
+        try{lsFp = JSON.parse(localStorage.getItem('flow_emergency_reset')||'{}')._fp||'';}catch(e){}
+        if(apiFp !== lsFp){
+            rstSteps = newSteps;
+            try{localStorage.setItem('flow_emergency_reset', JSON.stringify({data:rstSteps,_fp:apiFp}));}catch(e){}
+            renderResetSteps();
+        }
+    }catch(e){
+        if(rstSteps.length === 0) { rstSteps = DEFAULT_PROTOCOL; renderResetSteps(); }
+    }
+}
+
+function renderResetSteps(){
+    const el = document.getElementById('resetStepsList');
+    if(!el) return;
+    el.innerHTML = rstSteps.map((s,i)=>`<div class="rstep ${i===rstIdx?'active':i>rstIdx?'future':''}"><div class="rnum">${i+1}</div><span class="rst">${s}</span></div>`).join('');
+    const prev = document.getElementById('resetPrev');
+    const next = document.getElementById('resetNext');
+    if(prev) prev.style.display = rstIdx>0?'block':'none';
+    if(next) next.innerHTML = rstIdx>=rstSteps.length-1 ? '&#x25B6; 开始小任务' : '&#x25B6; 下一步';
+}
+
+function resetStep(d){
+    rstIdx = Math.max(0, Math.min(rstSteps.length-1, rstIdx+d));
+    renderResetSteps();
+    if(rstIdx >= rstSteps.length-1){
+        cp('energy');
+        setTimeout(()=>showP('planning'), 300);
+    }
+}
+
+// ========== 壁纸 Tab ==========
+async function loadSettingsPgrid(){
+    try{
+        const[pRes,sRes]=await Promise.all([fetch(API+'/api/desktop/wallpaper/presets'),fetch(API+'/api/desktop/status')]);
+        const p=await pRes.json(),st=await sRes.json();
+        const grid = document.getElementById('settingsPgrid');
+        if(grid) grid.innerHTML = p.presets.map(x=>`<div class="pitem ${x.id===curPreset?'on':''}" style="background:${x.color}" onclick="setPreset('${x.id}')" title="${x.name}"></div>`).join('');
+        document.getElementById('iToggle2')?.classList.toggle('on',!st.icons_visible);
+    }catch(e){}
+}
+async function setPreset(p){
+    curPreset = p;
+    try{await fetch(API+'/api/desktop/wallpaper',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({preset:p,path:''})});}catch(e){}
+    toast('壁纸已更换'); loadSettingsPgrid();
+}
+async function tIcons(){
+    const vis = await (async()=>{
+        try{const r=await fetch(API+'/api/desktop/icons/toggle',{method:'POST'});const d=await r.json();return d.visible;}catch(e){return true;}
+    })();
+    document.getElementById('iToggle')?.classList.toggle('on',!vis);
+    document.getElementById('iToggle2')?.classList.toggle('on',!vis);
+    toast(vis?'图标已显示':'图标已隐藏');
+}
+
+async function restoreAll(){
+    try{
+        const [r1, r2] = await Promise.all([
+            fetch(API+'/api/desktop/wallpaper/restore',{method:'POST'}),
+            fetch(API+'/api/config/reset',{method:'POST'})
+        ]);
+        const d1 = await r1.json(), d2 = await r2.json();
+        if(d1.success && d2.success){
+            toast('已恢复默认（壁纸+配置），心流历史已保留');
+            loadSettingsPgrid();
+        } else {
+            toast('恢复失败：'+(d1.detail||d2.detail||''));
+        }
+    }catch(e){ toast('恢复失败，请重试'); }
+}
+async function restoreWallpaper(){
+    // 兼容旧调用
+    restoreAll();
+}
+
+async function saveS(){
+    const s1=document.getElementById('ss1'),s2=document.getElementById('ss2'),s3=document.getElementById('ss3');
+    const s4=document.getElementById('ss4'),s5=document.getElementById('ss5'),s6=document.getElementById('ss6');
+    const cfg={pomodoro:{focus_duration:parseInt(s1?s1.value:25),short_break:parseInt(s2?s2.value:5),long_break:parseInt(s3?s3.value:15)},adhd:{check_in_interval:parseInt(s5?s5.value:15)},immersion:{hide_icons_on_start:s6?s6.classList.contains('on'):true,music_volume:parseInt(s4?s4.value:50)}};
+    try{await fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});}catch(e){}
+    dur=cfg.pomodoro.focus_duration;
+    if(!running)left=dur*60;
+    const clk=document.getElementById('clock');
+    if(clk)clk.textContent=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
+    toast('已保存');cp('settings');
+}
+
+// Web Audio 环境音
+function initA(){if(actx)return;actx=new(window.AudioContext||window.webkitAudioContext)();gain=actx.createGain();gain.gain.value=0.025;gain.connect(actx.destination);}
+function startA(type){
+    initA();
+    oscs.forEach(o=>{try{o.stop();}catch(e){}}); oscs=[];
+    const vol = parseFloat(document.getElementById('ss4')?.value || 50) / 100 * 0.05;
+    if(type === 'rain' || type === 'sine_ambient'){
+        // 舒曼共振多音混合（7个低频和声）
+        [174,285,396,528,639,741,852].forEach((fr,i)=>{
+            const o=actx.createOscillator(),g=actx.createGain();
+            o.type='sine'; o.frequency.value=fr;
+            g.gain.value=vol*0.8/(i+1);
+            o.connect(g); g.connect(gain); o.start(); oscs.push(o);
+        });
+    } else if(type === 'pink_ambient'){
+        // 粉噪音氛围（三角波低频）
+        [110,220,330].forEach((fr,i)=>{
+            const o=actx.createOscillator(),g=actx.createGain();
+            o.type='triangle'; o.frequency.value=fr;
+            g.gain.value=vol*1.2/(i+1);
+            o.connect(g); g.connect(gain); o.start(); oscs.push(o);
+        });
+    } else {
+        // 默认三音和声
+        [220,330,440].forEach((fr,i)=>{
+            const o=actx.createOscillator(),g=actx.createGain();
+            o.type='sine'; o.frequency.value=fr;
+            g.gain.value=vol*3/(i+1);
+            o.connect(g); g.connect(gain); o.start(); oscs.push(o);
+        });
+    }
+}
+function stopA(){oscs.forEach(o=>{try{o.stop();}catch(e){}});oscs=[];}
+function setVol(v){if(gain)gain.gain.value=v/100*0.05;}
+
+// ========== 迷你沉浸模式 ==========
+let miniMode = false;
+let miniMicroStyle = false; // false=clock风格(大字), true=微风格(小字)
+let clockLastClick = 0;
+let miniLastClick = 0;
+
+function toggleMiniMode(){
+    if(miniMode){
+        switchToClock();
+    }else{
+        switchToMini();
+    }
+}
+
+function switchToMini(){
+    if(miniMode) return;
+    miniMode = true;
+    miniMicroStyle = false;
+    // 保持当前窗口大小不变，只缩小计时字体
+    document.getElementById('miniMode').classList.add('active');
+    document.getElementById('h5MiniToggle').innerHTML = '&#x23EE; <span id="h5MiniToggleText">返回</span>';
+    // 迷你模式：字体缩小到时钟大小的70%（自适应个性化设置）
+    const root = document.documentElement;
+    const clockSize = getComputedStyle(root).getPropertyValue('--time-size').trim() || '5rem';
+    const scaleFactor = 0.7;
+    const miniSize = parseFloat(clockSize) * scaleFactor + clockSize.replace(/[\d.]+/, '');
+    const el = document.getElementById('miniTime');
+    if(el) { el.style.fontSize = miniSize; el.style.letterSpacing = '0.04em'; }
+    document.getElementById('miniTime').textContent = String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
+    syncMiniDisplay();
+    applyMiniMicroStyle();
+}
+
+function switchToClock(){
+    miniMode = false;
+    miniMicroStyle = false;
+    // 恢复窗口默认大小
+    fetch(API+'/api/window/move?mode=expanded',{method:'POST'}).catch(()=>{});
+    document.getElementById('miniMode').classList.remove('active');
+    document.getElementById('h5MiniToggle').innerHTML = '&#x1F3A7; <span id="h5MiniToggleText">迷你</span>';
+    // 恢复时钟模式的个性化字体大小（--time-size）
+    const root = document.documentElement;
+    const clockSize = getComputedStyle(root).getPropertyValue('--time-size').trim() || '5rem';
+    const el = document.getElementById('miniTime');
+    if(el) { el.style.fontSize = clockSize; el.style.letterSpacing = '0.06em'; }
+}
+
+function toggleMiniDisplayStyle(){
+    miniMicroStyle = !miniMicroStyle;
+    applyMiniMicroStyle();
+}
+
+function applyMiniMicroStyle(){
+    const el = document.getElementById('miniTime');
+    const btn = document.getElementById('miniMicroToggle');
+    if(!el) return;
+    // 读取用户配置的时钟字体大小
+    const root = document.documentElement;
+    const clockSize = getComputedStyle(root).getPropertyValue('--time-size') || '5rem';
+    if(miniMicroStyle){
+        // 微风格：小字紧凑（固定值，非时钟大小）
+        el.style.fontSize = '1.8rem';
+        el.style.letterSpacing = '0.02em';
+        if(btn) btn.innerHTML = '&#x1F3A7;';
+    } else {
+        // 时钟风格：使用个性化配置（--time-size）的70%
+        const scaleFactor = 0.7;
+        const miniSize = parseFloat(clockSize) * scaleFactor + clockSize.replace(/[\d.]+/, '');
+        el.style.fontSize = miniSize;
+        el.style.letterSpacing = '0.04em';
+        if(btn) btn.innerHTML = '&#x25A1;';
+    }
+}
+
+function switchMode(){ /* 已废弃，用toggleMiniMode代替 */ }
+function _updateModeBtn(){ /* 已废弃，合并到h5MiniToggle */ }
+
+function syncMiniDisplay(){
+    if(!miniMode) return;
+    const fill = document.getElementById('miniFill');
+    const time = document.getElementById('miniTime');
+    const state = document.getElementById('miniState');
+    if(!fill || !time) return;
+    const progress = dur > 0 ? 1 - left / (dur * 60) : 0;
+    fill.style.width = (progress * 100) + '%';
+    const m = Math.floor(left / 60), s = left % 60;
+    time.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    const isBreak = left < dur * 60 * 0.5 && left > 0 && running;
+    fill.style.background = isBreak
+        ? 'linear-gradient(90deg,#22c55e,#4ade80)'
+        : 'linear-gradient(90deg,#6366f1,#a855f7)';
+    state.textContent = running ? '专注中' : (left < dur * 60 && left > 0 ? '休息中' : '准备');
+}
+
+function miniTick(){
+    if(!miniMode) return;
+    syncMiniDisplay();
+    setTimeout(miniTick, 1000);
+}
+miniTick();
+
+// ========== 时钟模式：点击 .wrap 开始/暂停，双击重置 ==========
+document.getElementById('wrap').addEventListener('click', function(e){
+    if(miniMode) return;
+    if(e.target.closest('#ctrl') || e.target.closest('.quick-settings')) return;
+    const now = Date.now();
+    if(now - clockLastClick < 350){
+        resetT(); // 双击重置
+    }else{
+        setTimeout(()=>{
+            if(Date.now() - clockLastClick >= 350){
+                if(running) pauseT(); else startT();
+            }
+        }, 350);
+    }
+    clockLastClick = now;
+});
+
+// ========== 迷你模式：点击 miniMode 开始/暂停，双击重置 ==========
+document.getElementById('miniMode').addEventListener('click', function(e){
+    // 点击切换按钮时只切换模式，不触发开始/暂停
+    const sw = e.target.closest('.mini-switch');
+    if(sw){ switchToClock(); return; }
+    const now = Date.now();
+    if(now - miniLastClick < 350){
+        resetT(); // 双击重置
+    }else{
+        setTimeout(()=>{
+            if(Date.now() - miniLastClick >= 350){
+                if(running) pauseT(); else startT();
+            }
+        }, 350);
+    }
+    miniLastClick = now;
+});
+
+// ========== 关闭页面/标签页 = 停止计时 ==========
+window.addEventListener('beforeunload', function(){
+    if(running){
+        try{navigator.sendBeacon(API+'/api/pomodoro/abort','{}');}catch(e){}
+    }
+});
+
+// ========== 手动置顶切换 ==========
+let isTopmost = localStorage.getItem('flow_topmost') === 'true';
+
+function _applyTopmostBtn(){
+    const btn = document.getElementById('qsTopBtn');
+    if(!btn) return;
+    btn.style.borderColor = isTopmost ? 'var(--accent-primary)' : 'rgba(255,255,255,0.06)';
+    btn.style.color = isTopmost ? 'var(--accent-primary)' : 'var(--text)';
+    btn.style.background = isTopmost ? 'rgba(70,80,220,0.15)' : 'rgba(255,255,255,0.03)';
+}
+
+function toggleTopmost(){
+    const btn = document.getElementById('qsTopBtn');
+    fetch(API+'/api/window/topmost', {method:'POST'})
+        .then(r=>r.json())
+        .then(d=>{
+            isTopmost = d.topmost;
+            btn.style.borderColor = isTopmost ? 'var(--accent-primary)' : 'rgba(255,255,255,0.06)';
+            btn.style.color = isTopmost ? 'var(--accent-primary)' : 'var(--text)';
+            btn.style.background = isTopmost ? 'rgba(70,80,220,0.15)' : 'rgba(255,255,255,0.03)';
+            localStorage.setItem('flow_topmost', isTopmost);
+            toast(isTopmost ? '窗口已置顶' : '已取消置顶');
+            cp('settings');
+        })
+        .catch(e=>{
+            // 解析错误信息
+            e.response ? e.response.json().then(d=>toast('置顶失败: '+(d.detail||''))).catch(()=>toast('置顶失败')) : toast('置顶失败: 请确认计时器窗口处于活动状态');
+        });
+}
+
+// ========== 个性化设置 ==========
+const BG_PRESETS = [
+    {id:'dark',  name:'暗夜',   color:'#080810', text:'#dde4f0'},
+    {id:'mid',   name:'深夜',   color:'#0d0d1a', text:'#c8d0e8'},
+    {id:'deep',  name:'深紫',   color:'#0a0812', text:'#e0d8f8'},
+    {id:'blue',  name:'深蓝',   color:'#080c18', text:'#d0e0f8'},
+    {id:'warm',  name:'暖暗',   color:'#0f0a08', text:'#f0dcd0'},
+    {id:'green', name:'墨绿',   color:'#050f08', text:'#d0f0d8'},
+    {id:'red',   name:'暗红',   color:'#100505', text:'#f0d0d0'},
+    {id:'pure',  name:'纯黑',   color:'#000000', text:'#ffffff'},
+];
+
+function loadPersonalize(){
+    const root = document.documentElement;
+    const saved = JSON.parse(localStorage.getItem('flow_personalize')||'{}');
+    // 背景网格
+    const grid = document.getElementById('bgGrid');
+    if(grid){
+        grid.innerHTML = BG_PRESETS.map(b=>`<div class="pitem ${saved.bgId===b.id?'on':''}" onclick="setBg('${b.id}')" title="${b.name}" style="background:${b.color};border-color:${saved.bgId===b.id?'#fff':'transparent'};padding:0.4rem 0.6rem;border-radius:0.4rem"><span style="font-size:0.75rem;color:${b.text};font-weight:500">${b.name}</span></div>`).join('');
+    }
+    // 时间字体
+    if(saved.timeFont){
+        document.querySelectorAll('[onclick^="setTimeFont"]').forEach(el=>{
+            el.style.borderColor = el.style.fontFamily.includes(saved.timeFont.split(',')[0].replace(/'/g,'')) ? 'var(--accent-primary)' : '';
+        });
+    }
+    // 时间大小
+    const sz = document.getElementById('psTimeSize');
+    if(sz && saved.timeSize) sz.value = saved.timeSize;
+    // 亮度
+    const br = document.getElementById('psBrightness');
+    if(br && saved.brightness) br.value = saved.brightness;
+}
+
+function setBg(id){
+    const b = BG_PRESETS.find(x=>x.id===id);
+    if(!b) return;
+    const root = document.documentElement;
+    root.style.setProperty('--bg', b.color);
+    root.style.setProperty('--text', b.text);
+    root.style.setProperty('--muted', b.text.replace('f','9').replace('e','8').replace('d','7').replace('c','6').replace('b','5').replace('a','4'));
+    // 保存到localStorage + config.json
+    const saved = JSON.parse(localStorage.getItem('flow_personalize')||'{}');
+    saved.bgId = id;
+    saved.bgColor = b.color;
+    saved.textColor = b.text;
+    localStorage.setItem('flow_personalize', JSON.stringify(saved));
+    fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({personalize:saved})}).catch(()=>{});
+    loadPersonalize();
+}
+
+function setTimeFont(font, el){
+    document.querySelectorAll('[onclick^="setTimeFont"]').forEach(e=>e.style.borderColor='transparent');
+    if(el) el.style.borderColor='var(--accent-primary)';
+    const saved = JSON.parse(localStorage.getItem('flow_personalize')||'{}');
+    saved.timeFont = font;
+    localStorage.setItem('flow_personalize', JSON.stringify(saved));
+    fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({personalize:saved})}).catch(()=>{});
+}
+
+function setAccent(c1, c2, el){
+    document.querySelectorAll('[onclick^="setAccent"]').forEach(e=>e.style.border='2px solid transparent');
+    if(el) el.style.border='2px solid #fff';
+    const saved = JSON.parse(localStorage.getItem('flow_personalize')||'{}');
+    saved.accent1 = c1; saved.accent2 = c2;
+    localStorage.setItem('flow_personalize', JSON.stringify(saved));
+    fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({personalize:saved})}).catch(()=>{});
+}
+
+function switchSettingsTab(tab, btn){
+    document.querySelectorAll('.settings-tab').forEach(b=>b.classList.remove('active'));
+    if(btn) btn.classList.add('active');
+    document.getElementById('settingsTab_music').style.display = tab==='music'?'block':'none';
+    document.getElementById('settingsTab_wallpaper').style.display = tab==='wallpaper'?'block':'none';
+    document.getElementById('settingsTab_personalize').style.display = tab==='personalize'?'block':'none';
+    if(tab==='music'){ loadMusicList(); restoreMusicDir(); }
+    if(tab==='wallpaper') loadSettingsPgrid();
+    if(tab==='personalize') loadPersonalize();
+}
+
+function applyPersonalize(){
+    const root = document.documentElement;
+    const saved = JSON.parse(localStorage.getItem('flow_personalize')||'{}');
+    // 字体
+    if(saved.timeFont) root.style.setProperty('--time-font', saved.timeFont);
+    // 时间大小
+    const sz = document.getElementById('psTimeSize');
+    if(sz && sz.value) root.style.setProperty('--time-size', sz.value);
+    // 亮度
+    const br = document.getElementById('psBrightness');
+    if(br && br.value) root.style.setProperty('--ui-brightness', br.value);
+    // 强调色
+    if(saved.accent1) root.style.setProperty('--accent-primary', saved.accent1);
+    if(saved.accent2) root.style.setProperty('--accent-secondary', saved.accent2);
+    // 保存到 config.json（持久化到磁盘）
+    fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({personalize:saved})}).catch(()=>{});
+    saved.timeSize = sz ? sz.value : saved.timeSize;
+    saved.brightness = br ? br.value : saved.brightness;
+    localStorage.setItem('flow_personalize', JSON.stringify(saved));
+    toast('已应用个性化设置');
+    cp('settings');
+}
+
+function loadSavedPersonalize(){
+    const root = document.documentElement;
+    const saved = JSON.parse(localStorage.getItem('flow_personalize')||'{}');
+    if(saved.bgColor) root.style.setProperty('--bg', saved.bgColor);
+    if(saved.textColor) root.style.setProperty('--text', saved.textColor);
+    if(saved.timeFont) root.style.setProperty('--time-font', saved.timeFont);
+    if(saved.timeSize) root.style.setProperty('--time-size', saved.timeSize);
+    if(saved.brightness) root.style.setProperty('--ui-brightness', saved.brightness);
+    if(saved.accent1) root.style.setProperty('--accent-primary', saved.accent1);
+    if(saved.accent2) root.style.setProperty('--accent-secondary', saved.accent2);
+}
+
+document.addEventListener('DOMContentLoaded', async function(){
+    // 首次访问：创建桌面快捷方式
+    if(!localStorage.getItem('flow_shortcut_done')){
+        try{
+            const r = await fetch(API+'/api/shortcut/create',{method:'POST'});
+            const d = await r.json();
+            if(d.success){
+                localStorage.setItem('flow_shortcut_done','1');
+                const results = d.results || {};
+                let msg = '💗 桌面已创建：\n';
+                if(results.shortcut) msg += '「心流时钟」快捷方式\n';
+                if(results.bat) msg += '「启动心流时钟.bat」启动脚本';
+                toast(msg.replace(/\n/g,' '));
+            }
+        }catch(e){ /* 静默失败 */ }
+    }
+    loadSavedPersonalize(); // 恢复本地个性化设置
+    _applyTopmostBtn(); // 恢复置顶按钮状态
+    _updateModeBtn(); // 根据当前模式显示按钮文字
+    checkWizard(); // 检查是否需要首次提醒引导
+    // 页面打开时自动居中窗口
+    fetch(API+'/api/window/move?mode=centered',{method:'POST'}).catch(()=>{});
+    try{
+        const r=await fetch(API+'/api/config');const c=await r.json();
+        if(c.pomodoro){
+            dur=c.pomodoro.focus_duration||25;
+            left=dur*60; // 同步更新剩余秒数
+            const el=document.getElementById('ss1');if(el)el.value=dur;
+        }
+        const el5=document.getElementById('ss5');
+        if(c.adhd&&el5){el5.value=c.adhd.check_in_interval||15;}
+        if(c.immersion){
+            const el6=document.getElementById('ss6');
+            if(c.immersion.hide_icons_on_start!==false){if(el6)el6.classList.add('on');}else{if(el6)el6.classList.remove('on');}
+            const el4=document.getElementById('ss4');
+            if(c.immersion.music_volume&&el4){el4.value=c.immersion.music_volume;}
+            // 恢复音乐目录和播放模式
+            if(c.immersion.music_dir){
+                localMusicDir = c.immersion.music_dir;
+                localStorage.setItem('flow_music_dir', localMusicDir);
+            }
+            restoreMusicDir(); // 显示目录路径并填充输入框
+            if(localMusicDir) loadMusicFromDir(); // 加载自定义目录音乐
+            if(c.immersion.music_mode){
+                musicMode = c.immersion.music_mode;
+                updateMusicModeBtn();
+            }
+            if(c.immersion.music_volume){
+                const el4=document.getElementById('ss4');
+                if(el4) el4.value=c.immersion.music_volume;
+            }
+        }
+        // 恢复提醒设置（服务器优先，本地作为兜底）
+        if(c.reminder){
+            reminderState.enabled = c.reminder.enabled !== undefined ? c.reminder.enabled : true;
+            reminderState.activeItems = (c.reminder.active_items && c.reminder.active_items.length > 0)
+                ? c.reminder.active_items : ['water','eye','stretch','posture','breathe'];
+            reminderState.intervalMinutes = c.reminder.custom_interval || 30;
+            reminderState.customMsg = c.reminder.custom_message || '';
+            reminderState.customReminders = c.reminder.custom_reminders || [];
+        }
+        // 恢复个性化设置（服务器优先）
+        if(c.personalize){
+            const root = document.documentElement;
+            if(c.personalize.bg_color) root.style.setProperty('--bg', c.personalize.bg_color);
+            if(c.personalize.text_color) root.style.setProperty('--text', c.personalize.text_color);
+            if(c.personalize.time_font) root.style.setProperty('--time-font', c.personalize.time_font);
+            if(c.personalize.time_size) root.style.setProperty('--time-size', c.personalize.time_size);
+            if(c.personalize.brightness) root.style.setProperty('--ui-brightness', c.personalize.brightness);
+            if(c.personalize.accent1) root.style.setProperty('--accent-primary', c.personalize.accent1);
+            if(c.personalize.accent2) root.style.setProperty('--accent-secondary', c.personalize.accent2);
+            // 同步到localStorage
+            localStorage.setItem('flow_personalize', JSON.stringify(c.personalize));
+        }
+    }catch(e){console.error('Config load error:',e);}
+    left=dur*60;
+    const clk=document.getElementById('clock');
+    if(clk)clk.textContent=String(Math.floor(left/60)).padStart(2,'0')+':00';
+    const th=document.getElementById('taskHint');
+    if(th)th.classList.add('show');
+    const ch=document.getElementById('clockHint');
+    if(ch){ch.textContent='点击进入心流 · 双击重置';ch.classList.add('show');}
+    const br=document.getElementById('breathe');
+    if(br)br.style.opacity='0.2';
+});
+
+// ========== 新功能：任务规划 ==========
+let planSteps = [], selectedStepIdx = -1, currentStepDesc = '', distractionCount = 0, isCompact = false;
+
+async function loadPlan(){
+    // 1. localStorage 立即读取并渲染（无白屏）
+    let hasLocalData = false;
+    try{
+        const raw = localStorage.getItem('flow_plan_steps');
+        if(raw){
+            const c = JSON.parse(raw);
+            if(c.data && c.data.length > 0) { planSteps = c.data; selectedStepIdx = -1; hasLocalData = true; renderPlan(); }
+        }
+    }catch(e){}
+    // 2. API 异步拉取 → 指纹比对 → 不同则覆盖
+    try{
+        const r = await fetch(API+'/api/planning/today');
+        const d = await r.json();
+        const apiSteps = d.steps || [];
+        const apiFp = JSON.stringify(apiSteps);
+        let lsFp = '';
+        try{lsFp = JSON.parse(localStorage.getItem('flow_plan_steps')||'{}')._fp||'';}catch(e){}
+        if(apiFp !== lsFp){
+            if(apiSteps.length > 0){
+                planSteps = apiSteps;
+                selectedStepIdx = -1;
+                try{localStorage.setItem('flow_plan_steps', JSON.stringify({data:planSteps,_fp:apiFp}));}catch(e){}
+                renderPlan();
+            } else if(hasLocalData){
+                // API为空但本地有数据 → 推送本地数据到API
+                try{
+                    const resp = await fetch(API+'/api/planning/save',{
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify(planSteps)
+                    });
+                    if(resp.ok){
+                        try{localStorage.setItem('flow_plan_steps', JSON.stringify({data:planSteps,_fp:apiFp}));}catch(e){}
+                    }
+                }catch(e){}
+            } else {
+                planSteps = apiSteps;
+                selectedStepIdx = -1;
+                try{localStorage.setItem('flow_plan_steps', JSON.stringify({data:planSteps,_fp:apiFp}));}catch(e){}
+                renderPlan();
+            }
+        }
+    }catch(e){
+        // API不可用 → 保持本地数据
+    }
+}
+
+function renderPlan(){
+    const el = document.getElementById('planStepsList');
+    if(!el) return;
+    if(planSteps.length === 0){
+        el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:1rem;font-size:0.7rem">暂无计划，添加步骤后点击开始</div>';
+    } else {
+        el.innerHTML = planSteps.map((s,i)=>`
+            <div class="pstep ${i===selectedStepIdx?'selected':''}" onclick="selectPlanStep(${i})">
+                <div class="pstep-desc">${s.description}</div>
+                <div class="pstep-time">${s.minutes}分</div>
+                <div class="pstep-del" onclick="event.stopPropagation();delPlanStep(${i})">x</div>
+            </div>
+        `).join('');
+    }
+    // 更新开始按钮文字
+    const btn = document.getElementById('planStartBtn');
+    if(btn){
+        if(selectedStepIdx >= 0 && planSteps[selectedStepIdx]){
+            const s = planSteps[selectedStepIdx];
+            btn.textContent = `开始「${s.description}」(${s.minutes}分钟)`;
+            btn.style.opacity = '1';
+        } else {
+            btn.textContent = '请先选择一个步骤';
+            btn.style.opacity = '0.4';
+        }
+    }
+}
+
+function selectPlanStep(idx){
+    selectedStepIdx = idx;
+    renderPlan();
+}
+
+function addPlanStep(){
+    const desc = document.getElementById('pDescInput')?.value.trim();
+    const minEl = document.getElementById('pMinSelect');
+    const min = parseInt(minEl ? minEl.value : '25');
+    if(!desc) return;
+    planSteps.push({description: desc, minutes: min});
+    if(document.getElementById('pDescInput')) document.getElementById('pDescInput').value = '';
+    savePlanToServer();
+    renderPlan();
+}
+
+function delPlanStep(idx){
+    planSteps.splice(idx, 1);
+    if(selectedStepIdx === idx) selectedStepIdx = -1;
+    else if(selectedStepIdx > idx) selectedStepIdx--;
+    savePlanToServer();
+    renderPlan();
+}
+
+async function savePlanToServer(){
+    // 1. localStorage 同步写入（立即持久化）
+    const fp = JSON.stringify(planSteps);
+    try{localStorage.setItem('flow_plan_steps', JSON.stringify({data:planSteps,_fp:fp}));}catch(e){}
+    // 2. API 异步同步
+    try{
+        const resp = await fetch(API+'/api/planning/save',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(planSteps)
+        });
+        if(resp.ok){
+            try{localStorage.setItem('flow_plan_steps', JSON.stringify({data:planSteps,_fp:fp}));}catch(e){}
+        }
+    }catch(e){}
+}
+
+function clearPlan(){
+    planSteps = []; selectedStepIdx = -1;
+    savePlanToServer(); renderPlan();
+}
+
+function startFromPlanStep(){
+    if(selectedStepIdx < 0 || !planSteps[selectedStepIdx]){
+        toast('请先选择一个步骤');
+        return;
+    }
+    const step = planSteps[selectedStepIdx];
+    currentStepDesc = step.description;
+    dur = step.minutes;
+    left = dur * 60;
+    // 更新计时器显示
+    const clk = document.getElementById('clock');
+    if(clk) clk.textContent = String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
+    const td = document.getElementById('timerStepDesc');
+    if(td){td.textContent = currentStepDesc; td.classList.add('show');}
+    cp('planning');
+    // >=25分钟：弹出能量重置
+    if(dur >= 25){
+        showEnergyReset(function(){
+            startTimerCore();
+        });
+        return;
+    }
+    startTimerCore();
+}
+
+// ========== 能量重置 ==========
+const ENERGY_OPTIONS = [
+    {seconds: 30, label: '30秒', prompt: '深呼吸3次：吸气4秒 · 屏气4秒 · 呼气6秒'},
+    {seconds: 60, label: '1分钟', prompt: '站起来活动，颈部+肩部+腰部各拉伸'},
+    {seconds: 120, label: '2分钟', prompt: '走动一下，喝杯水，让眼睛休息'},
+    {seconds: 180, label: '3分钟', prompt: '闭眼冥想，关注呼吸，感受身体重量'},
+];
+
+let _energyCallback = null;
+
+function showEnergyReset(callback){
+    _energyCallback = callback;
+    const overlay = document.getElementById('energyResetOverlay');
+    const opts = document.getElementById('energyOpts');
+    const countdown = document.getElementById('energyCountdown');
+    opts.style.display = 'flex';
+    opts.style.flexDirection = 'column';
+    countdown.style.display = 'none';
+    opts.innerHTML = ENERGY_OPTIONS.map(o =>
+        `<div class="eopt" onclick="startEnergyCountdown(${o.seconds},'${o.prompt.replace(/'/g,"\\'")}')">${o.label} - ${o.prompt}</div>`
+    ).join('');
+    overlay.classList.add('show');
+}
+
+function startEnergyCountdown(seconds, prompt){
+    const opts = document.getElementById('energyOpts');
+    const countdown = document.getElementById('energyCountdown');
+    const clock = document.getElementById('energyClock');
+    const promptEl = document.getElementById('energyPrompt');
+    opts.style.display = 'none';
+    countdown.style.display = 'block';
+    clock.textContent = String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+    promptEl.textContent = prompt;
+    let remaining = seconds;
+    const iv = setInterval(()=>{
+        remaining--;
+        clock.textContent = String(Math.floor(remaining/60)).padStart(2,'0')+':'+String(remaining%60).padStart(2,'0');
+        if(remaining <= 0){
+            clearInterval(iv);
+            document.getElementById('energyResetOverlay').classList.remove('show');
+            if(_energyCallback) _energyCallback();
+        }
+    }, 1000);
+    // 允许跳过
+    window._energyInterval = iv;
+}
+
+function skipEnergyReset(){
+    if(window._energyInterval) clearInterval(window._energyInterval);
+    document.getElementById('energyResetOverlay').classList.remove('show');
+    if(_energyCallback) _energyCallback();
+}
+
+// ========== 紧急重置触发 ==========
+async function checkEmergencyTrigger(reason){
+    try{
+        const r = await fetch(API+'/api/pomodoro/current');
+        const d = await r.json();
+        if(d && d.distractions !== undefined){
+            distractionCount = d.distractions;
+        }
+    }catch(e){}
+    if(reason === 'pause' || distractionCount > 2){
+        showP('emergency');
+    }
+}
+
+// ========== 窗口扩展/紧凑 ==========
+function launchImmersive(){
+    fetch(API+'/api/immersive/launch',{method:'POST'})
+        .then(r=>r.json())
+        .then(d=>{
+            toast('沉浸窗口已启动');
+        })
+        .catch(()=>toast('启动失败，请重启服务'));
+}
+
+// ========== 提醒功能 ==========
+let reminderState = {
+    enabled: true,  // 默认开启提醒
+    activeItems: ['water','eye','stretch','posture','breathe'], // 默认全部激活
+    intervalMinutes: 30,
+    customMsg: '',
+    customReminders: []  // 自定义提醒列表（含自定义的）
+};
+let reminderIntervalId = null;
+let _triggeredIntervals = new Set(); // 已触发过的interval标记（去重）
+let _lastReminderTime = 0; // 上次弹出提醒的时间戳（用于3分钟内合并）
+
+// ========== 首次专注模板引导 ==========
+const FOCUS_TEMPLATES = [
+    {id:'focus',    label:'专注模板',   focus:40, breakT:5,  remindInterval:20, remindMsg:'喝水+伸展'},
+    {id:'short',   label:'短任务模板', focus:25, breakT:3,  remindInterval:15, remindMsg:'眨眼+喝水'},
+    {id:'creative',label:'创意模板',   focus:90, breakT:10, remindInterval:30, remindMsg:'起身活动'},
+    {id:'study',   label:'学习模板',   focus:50, breakT:10, remindInterval:25, remindMsg:'调整坐姿+喝水'},
+];
+let wizardSelectedId = null; // 选中的模板ID，null=自定义
+
+function renderWizardTemplates(){
+    const el = document.getElementById('wizardTemplates');
+    if(!el) return;
+    el.innerHTML = FOCUS_TEMPLATES.map(t => {
+        const isActive = wizardSelectedId === t.id;
+        return `<div class="rtpl ${isActive?'active':''}" onclick="selectFocusTemplate('${t.id}')">
+            <input type="radio" name="wizTpl" value="${t.id}" ${isActive?'checked':''} onclick="event.stopPropagation();selectFocusTemplate('${t.id}')">
+            <div class="rtpl-info">
+                <div class="rtpl-label">${t.label}</div>
+                <div class="rtpl-msg">${t.focus}min专注 / ${t.breakT}min休息 / 每${t.remindInterval}min提醒</div>
+                <div class="rtpl-msg" style="color:#818cf8">${t.remindMsg}</div>
+            </div>
+        </div>`;
+    }).join('');
+    updateWizardPreview();
+}
+
+function selectFocusTemplate(id){
+    wizardSelectedId = id;
+    renderWizardTemplates();
+}
+
+function switchWizardTab(tab, btn){
+    document.querySelectorAll('.settings-tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('wizPresetPanel').style.display = tab==='preset'?'block':'none';
+    document.getElementById('wizCustomPanel').style.display = tab==='custom'?'block':'none';
+    if(tab==='custom') wizardSelectedId = 'custom';
+    else wizardSelectedId = wizardSelectedId === 'custom' ? null : wizardSelectedId;
+    renderWizardTemplates();
+    updateWizardPreview();
+}
+
+function updateWizardPreview(){
+    const previewEl = document.getElementById('wizPreview');
+    const contentEl = document.getElementById('wizPreviewContent');
+    if(!previewEl || !contentEl) return;
+    let lines = [];
+    if(wizardSelectedId && wizardSelectedId !== 'custom'){
+        const t = FOCUS_TEMPLATES.find(x=>x.id===wizardSelectedId);
+        if(t){
+            lines = [
+                `模式：${t.label}`,
+                `专注 ${t.focus}分钟 → 休息 ${t.breakT}分钟`,
+                `每 ${t.remindInterval}分钟提醒：${t.remindMsg}`
+            ];
+        }
+    } else if(wizardSelectedId === 'custom'){
+        const focus = document.getElementById('wizFocusDur')?.value || 40;
+        const brk   = document.getElementById('wizBreakDur')?.value || 5;
+        const rint  = document.getElementById('wizRemindInterval')?.value || 20;
+        const rmsg  = document.getElementById('wizRemindMsg')?.value.trim();
+        lines = [
+            `模式：自定义`,
+            `专注 ${focus}分钟 → 休息 ${brk}分钟`,
+            `每 ${rint}分钟提醒${rmsg?'：'+rmsg:''}`
+        ];
+    }
+    if(lines.length > 0){
+        previewEl.style.display = 'block';
+        contentEl.innerHTML = lines.join('<br>');
+    } else {
+        previewEl.style.display = 'none';
+    }
+}
+
+// 监听自定义表单变化，实时更新预览
+document.addEventListener('DOMContentLoaded', function(){
+    ['wizFocusDur','wizBreakDur','wizRemindInterval','wizRemindMsg'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(el) el.addEventListener('change', updateWizardPreview);
+        if(el && id === 'wizRemindMsg') el.addEventListener('input', updateWizardPreview);
+    });
+});
+
+async function confirmWizard(){
+    if(!wizardSelectedId) wizardSelectedId = 'focus'; // 默认
+    let focusDur=40, breakDur=5, remindInterval=20, remindMsg='喝水+伸展', remindItems=['water','stretch'];
+    let templateLabel = '默认';
+    if(wizardSelectedId === 'custom'){
+        focusDur = parseInt(document.getElementById('wizFocusDur')?.value || 40);
+        breakDur = parseInt(document.getElementById('wizBreakDur')?.value || 5);
+        remindInterval = parseInt(document.getElementById('wizRemindInterval')?.value || 20);
+        remindMsg = document.getElementById('wizRemindMsg')?.value.trim() || '起身活动';
+        remindItems = ['water','custom_main']; // 自定义模式用 custom_main 提醒
+        templateLabel = '自定义';
+    } else {
+        const t = FOCUS_TEMPLATES.find(x=>x.id===wizardSelectedId);
+        if(t){
+            focusDur=t.focus; breakDur=t.breakT; remindInterval=t.remindInterval; remindMsg=t.remindMsg; templateLabel=t.label;
+        }
+    }
+    // 准备好提醒数据
+    var reminderBody = {
+        enabled: true,
+        active_items: remindItems,
+        custom_interval: remindInterval,
+        custom_message: remindMsg,
+        custom_reminders: [{id:'custom_main', label:'健康提醒', msg: remindMsg, interval: remindInterval}]
+    };
+    var cfg = {
+        pomodoro: { focus_duration: focusDur, short_break: breakDur },
+        reminder: reminderBody
+    };
+    try{
+        await fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+        await fetch(API+'/api/reminders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reminderBody)});
+    }catch(e){}
+    // 同步UI
+    reminderState.enabled = true;
+    reminderState.activeItems = remindItems;
+    reminderState.intervalMinutes = remindInterval;
+    reminderState.customMsg = remindMsg;
+    reminderState.customReminders = [{id:'custom_main', label:'健康提醒', msg: remindMsg, interval: remindInterval}];
+    var durEl = document.getElementById('ss1');
+    if(durEl) durEl.value = focusDur;
+    dur = focusDur;
+    localStorage.setItem('flow_wizard_done', '1');
+    closeWizard();
+    toast(`已应用「${templateLabel}」：专注${focusDur}分钟`);
+}
+
+function skipWizard(){
+    localStorage.setItem('flow_wizard_done', '1');
+    closeWizard();
+    toast('已跳过，可在设置中调整专注参数');
+}
+
+function closeWizard(){
+    document.getElementById('wizardOverlay').classList.remove('show');
+}
+
+async function checkWizard(){
+    if(localStorage.getItem('flow_wizard_done') === '1') return;
+    try{
+        const r = await fetch(API+'/api/config');
+        const d = await r.json();
+        if(d && (d.pomodoro || d.reminder)){
+            localStorage.setItem('flow_wizard_done', '1');
+            return;
+        }
+    }catch(e){}
+    wizardSelectedId = 'focus'; // 默认选中专注模板
+    renderWizardTemplates();
+    updateWizardPreview();
+    setTimeout(function(){
+        document.getElementById('wizardOverlay').classList.add('show');
+    }, 800);
+}
+
+const REMINDER_TEMPLATES = [
+    {id:'water', label:'喝水', msg:'起身倒杯水，小口慢饮，给身体补充水分', interval:20},
+    {id:'eye', label:'护眼', msg:'看看窗外远处，让眼睛休息20秒', interval:20},
+    {id:'stretch', label:'拉伸', msg:'站起来伸展双臂，活动颈椎和腰部', interval:30},
+    {id:'posture', label:'姿势', msg:'检查坐姿：背部挺直，肩膀放松', interval:25},
+    {id:'breathe', label:'深呼吸', msg:'深呼吸3次：吸气4秒，屏住4秒，呼气6秒', interval:15},
+];
+
+async function loadReminder(){
+    try{
+        const r = await fetch(API+'/api/reminders');
+        const d = await r.json();
+        reminderState.enabled = d.enabled !== undefined ? d.enabled : true;
+        // 合并：内置模板ID + 自定义提醒ID（custom_main等）均保留
+        const ALL_DEFAULTS = ['water','eye','stretch','posture','breathe'];
+        const raw = d.active_items || [];
+        const validItems = raw.filter(id => ALL_DEFAULTS.includes(id) || id === 'custom_main' || id.startsWith('custom_'));
+        reminderState.activeItems = validItems.length > 0 ? validItems : ALL_DEFAULTS;
+        reminderState.intervalMinutes = d.custom_interval || 30;
+        reminderState.customMsg = d.custom_message || '';
+        reminderState.customReminders = d.custom_reminders || [];
+        // Toggle UI
+        const tg = document.getElementById('rToggle');
+        if(tg) tg.classList.toggle('on', reminderState.enabled);
+        const iv = document.getElementById('rInterval');
+        if(iv) iv.value = reminderState.intervalMinutes;
+        const cm = document.getElementById('rCustomMsg');
+        if(cm) cm.value = reminderState.customMsg;
+        renderReminderTemplates();
+        loadMusicList();
+    }catch(e){ renderReminderTemplates(); loadMusicList(); }
+}
+
+function renderReminderTemplates(){
+    const el = document.getElementById('rTemplates');
+    if(!el) return;
+    // 合并：模板 + 自定义（去重：排除与模板ID重复的自定义项）
+    const builtInIds = new Set(REMINDER_TEMPLATES.map(t=>t.id));
+    const allReminders = [
+        ...REMINDER_TEMPLATES.map(t=>({...t, isCustom:false})),
+        ...reminderState.customReminders
+            .filter(c=>!builtInIds.has(c.id))
+            .map(c=>({...c, isCustom:true}))
+    ];
+    el.innerHTML = allReminders.map(t=>`
+        <div class="rtpl ${reminderState.activeItems.includes(t.id)?'active':''}" onclick="toggleReminderTpl('${t.id}')">
+            <input type="checkbox" ${reminderState.activeItems.includes(t.id)?'checked':''} onclick="event.stopPropagation();toggleReminderTpl('${t.id}')">
+            <div class="rtpl-info">
+                <div class="rtpl-label">${t.label} ${t.isCustom?'[自定义]':''}</div>
+                <div class="rtpl-msg">${t.msg}</div>
+            </div>
+            <div class="rtpl-interval">${t.interval}分钟</div>
+            ${t.isCustom?`<div class="rtpl-ops" onclick="event.stopPropagation()">
+                <button class="rtpl-op" onclick="editReminderTpl('${t.id}')" title="编辑">&#x270F; <span style="font-size:0.5rem">编辑</span></button>
+                <button class="rtpl-op del" onclick="deleteReminderTpl('${t.id}')" title="删除">&#x2715; <span style="font-size:0.5rem">删除</span></button>
+            </div>`:''}
+        </div>
+    `).join('');
+}
+
+function toggleReminderTpl(id){
+    const idx = reminderState.activeItems.indexOf(id);
+    if(idx >= 0) reminderState.activeItems.splice(idx, 1);
+    else reminderState.activeItems.push(id);
+    saveReminderSettings();
+}
+
+function editReminderTpl(id){
+    const item = reminderState.customReminders.find(c=>c.id===id);
+    if(!item) return;
+    document.getElementById('editReminderId').value = id;
+    document.getElementById('editReminderLabel').value = item.label || '';
+    document.getElementById('editReminderMsg').value = item.msg || '';
+    document.getElementById('editReminderInterval').value = item.interval || 30;
+    document.getElementById('editReminderOverlay').classList.add('show');
+}
+
+function deleteReminderTpl(id){
+    document.getElementById('deleteReminderId').value = id;
+    const titleEl = document.getElementById('deleteConfirmTitle');
+    const msgEl = document.getElementById('deleteConfirmMsg');
+    const cancelBtn = document.getElementById('deleteCancelBtn');
+    const okBtn = document.getElementById('deleteOkBtn');
+    if (titleEl) titleEl.textContent = '确认删除';
+    if (msgEl) msgEl.textContent = '确定删除这条自定义提醒？';
+    if (cancelBtn) cancelBtn.textContent = '取消';
+    if (okBtn) okBtn.textContent = '确认删除';
+    document.getElementById('deleteConfirmOverlay').classList.add('show');
+}
+
+function closeDeleteConfirm(){
+    document.getElementById('deleteConfirmOverlay').classList.remove('show');
+}
+
+function doDeleteReminder(){
+    closeDeleteConfirm();
+    const id = document.getElementById('deleteReminderId').value;
+    if(!id) return;
+    reminderState.customReminders = reminderState.customReminders.filter(c=>c.id!==id);
+    reminderState.activeItems = reminderState.activeItems.filter(a=>a!==id);
+    saveReminderSettings();
+    toast('已删除');
+}
+
+function closeEditReminder(){
+    document.getElementById('editReminderOverlay').classList.remove('show');
+}
+
+async function confirmEditReminder(){
+    const id = document.getElementById('editReminderId').value;
+    const label = document.getElementById('editReminderLabel').value.trim();
+    const msg = document.getElementById('editReminderMsg').value.trim();
+    const interval = parseInt(document.getElementById('editReminderInterval').value) || 30;
+    if(!label || !msg){ toast('请填写名称和内容'); return; }
+    const idx = reminderState.customReminders.findIndex(c=>c.id===id);
+    if(idx >= 0){
+        reminderState.customReminders[idx] = {...reminderState.customReminders[idx], label, msg, interval};
+    }
+    closeEditReminder();
+    saveReminderSettings();
+    toast('已保存');
+}
+
+function toggleReminder(){
+    reminderState.enabled = !reminderState.enabled;
+    const tg = document.getElementById('rToggle');
+    if(tg) tg.classList.toggle('on', reminderState.enabled);
+    saveReminderSettings();
+}
+
+async function saveReminderSettings(){
+    reminderState.intervalMinutes = parseInt(document.getElementById('rInterval')?.value || 30);
+    const body = {
+        enabled: reminderState.enabled,
+        active_items: reminderState.activeItems,
+        custom_interval: reminderState.intervalMinutes,
+        custom_message: reminderState.customMsg,
+        custom_reminders: reminderState.customReminders
+    };
+    // 保存到后端config.json（持久化）
+    try{await fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reminder:body})});}catch(e){}
+    // 同时保存到reminders.json（保持兼容性）
+    try{await fetch(API+'/api/reminders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}catch(e){}
+    renderReminderTemplates();
+    toast('提醒设置已保存');
+}
+
+async function addCustomReminder(){
+    const msgInput = document.getElementById('rCustomMsg');
+    const msgInputEl = msgInput?.value.trim() || '';
+    if(!msgInputEl){ toast('请输入提醒内容'); return; }
+    // 防止重复添加相同内容
+    if(reminderState.customReminders.find(c=>c.msg===msgInputEl)){
+        toast('已存在相同提醒');
+        return;
+    }
+    const customInterval = parseInt(document.getElementById('rCustomInterval')?.value) || reminderState.intervalMinutes || 30;
+    const newId = 'custom_' + Date.now();
+    reminderState.customReminders.push({id:newId, label:'自定义', msg:msgInputEl, interval:customInterval});
+    if(!reminderState.activeItems.includes(newId)) reminderState.activeItems.push(newId);
+    reminderState.customMsg = msgInputEl;
+    // 清空输入框
+    if(msgInput) msgInput.value = '';
+    saveReminderSettings();
+}
+
+// 记住上次的提醒详情状态（弹窗关闭后重置）
+let _reminderDetailExpanded = false;
+let _lastReminderMsgs = []; // 存储上次的全部消息列表
+
+// 预创建音频上下文（延迟初始化，在用户首次交互后生效）
+let _reminderAudioCtx = null;
+function _getReminderAudioCtx(){
+    if(!_reminderAudioCtx){
+        try{
+            _reminderAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }catch(e){ return null; }
+    }
+    return _reminderAudioCtx;
+}
+
+function _playReminderBeep(){
+    try{
+        const ac = _getReminderAudioCtx();
+        if(!ac) return;
+        // 如果AudioContext处于suspended状态，先resume
+        if(ac.state === 'suspended'){
+            ac.resume().then(()=>_doPlayBeep(ac)).catch(()=>{});
+        } else {
+            _doPlayBeep(ac);
+        }
+    }catch(e){}
+}
+
+function _doPlayBeep(ac){
+    try{
+        // 双音提示音（880Hz + 660Hz，更容易被注意到）
+        [880, 660].forEach((freq, i)=>{
+            const o = ac.createOscillator();
+            const g = ac.createGain();
+            o.type = 'sine';
+            o.frequency.value = freq;
+            g.gain.value = 0.04;
+            o.connect(g);
+            g.connect(ac.destination);
+            o.start(ac.currentTime + i * 0.15);
+            o.stop(ac.currentTime + i * 0.15 + 0.25);
+        });
+    }catch(e){}
+}
+
+function triggerReminder(){
+    const builtIn = REMINDER_TEMPLATES.filter(t=>reminderState.activeItems.includes(t.id));
+    const customActive = reminderState.customReminders.filter(c=>reminderState.activeItems.includes(c.id));
+    if(builtIn.length === 0 && customActive.length === 0 && !reminderState.customMsg) return;
+    const now = Date.now();
+    // 3分钟内合并：只弹一次，收集所有待提示的消息
+    if(_lastReminderTime > 0 && now - _lastReminderTime < 3 * 60 * 1000){
+        // 已在3分钟内弹过，不再重复弹出（只更新记录）
+        _lastReminderTime = now;
+        return;
+    }
+    _lastReminderTime = now;
+    // 收集所有激活的提醒消息
+    const msgs = [];
+    if(reminderState.customMsg) msgs.push(reminderState.customMsg);
+    customActive.forEach(c=>{ if(c.msg) msgs.push(c.msg); });
+    builtIn.forEach(t=>{ if(t.msg) msgs.push(t.msg); });
+    if(msgs.length === 0) return;
+    // 保存全部消息供详情展开用
+    _lastReminderMsgs = msgs;
+    _reminderDetailExpanded = false; // 重置为收起状态
+    // 合并消息：取第一条主要消息+数量提示
+    const primary = msgs[0];
+    const display = msgs.length > 1 ? primary + '\n\n另有 ' + (msgs.length - 1) + ' 项提醒' : primary;
+    document.getElementById('rPopupMsg').textContent = display;
+    // 显示/隐藏详情展开按钮
+    const toggleEl = document.getElementById('reminderDetailToggle');
+    const detailEl = document.getElementById('reminderDetailList');
+    const btn = document.getElementById('toggleReminderDetailBtn');
+    if(msgs.length > 1){
+        toggleEl.style.display = '';
+        detailEl.style.display = 'none';
+        btn.innerHTML = '&#x25BC; 查看全部提醒';
+    } else {
+        toggleEl.style.display = 'none';
+        detailEl.style.display = 'none';
+    }
+    document.getElementById('reminderPopupOverlay').classList.add('show');
+    // 音频提示（使用预创建的AudioContext，支持suspended状态自动resume）
+    _playReminderBeep();
+}
+
+function toggleReminderDetail(){
+    const detailEl = document.getElementById('reminderDetailList');
+    const btn = document.getElementById('toggleReminderDetailBtn');
+    _reminderDetailExpanded = !_reminderDetailExpanded;
+    if(_reminderDetailExpanded){
+        // 展开：显示全部消息列表
+        const items = _lastReminderMsgs.map((m,i)=>`<div>&#x2022; ${m}</div>`).join('');
+        detailEl.innerHTML = items;
+        detailEl.style.display = '';
+        btn.innerHTML = '&#x25B2; 收起详情';
+    } else {
+        // 收起
+        detailEl.style.display = 'none';
+        btn.innerHTML = '&#x25BC; 查看全部提醒';
+    }
+}
+
+function dismissReminderPopup(){
+    document.getElementById('reminderPopupOverlay').classList.remove('show');
+    _reminderDetailExpanded = false;
+}
+
+// 修改tick()：在计时中检查提醒间隔
+const _orig_tick = null; // 占位，在tick函数中内联处理
+
+// ========== 音乐功能 ==========
+let musicFiles = [], builtInMusic = [], selectedMusic = null, audioEl = null;
+let musicMode = 'loop'; // 'loop'=单曲循环, 'shuffle'=随机
+let musicShuffleQueue = [];
+
+async function loadMusicList(){
+    try{
+        const r = await fetch(API+'/api/music/list');
+        const d = await r.json();
+        musicFiles = d.files || [];
+        builtInMusic = d.built_in || [];
+        renderMusicList();
+        updateMusicModeBtn();
+    }catch(e){ renderMusicList(); }
+}
+
+function renderMusicList(){
+    const el = document.getElementById('musicList');
+    if(!el) return;
+    const all = [
+        {id:'none', name:'关闭', type:'builtin'},
+        ...builtInMusic.map(m=>({id:'gen:'+m.id, name:m.name, type:'builtin'})),
+        ...musicFiles.map(m=>({id:'file:'+m.file, name:m.name, type:'file'}))
+    ];
+    el.innerHTML = all.map(m=>`
+        <div class="musitem ${selectedMusic===m.id?'playing':''}" onclick="playMusic('${m.id}')">
+            <input type="radio" name="music" value="${m.id}" ${selectedMusic===m.id?'checked':''} onclick="event.stopPropagation();playMusic('${m.id}')">
+            <span style="flex:1">${m.name}</span>
+            ${m.type==='generated'?'<span style="font-size:0.55rem;color:var(--muted)">内置</span>':''}
+            ${m.type==='file'?'<span style="font-size:0.55rem;color:var(--muted)">文件</span>':''}
+        </div>
+    `).join('');
+}
+
+function playMusic(id){
+    if(selectedMusic === id){
+        stopMusic();
+        selectedMusic = null;
+        renderMusicList();
+        return;
+    }
+    selectedMusic = id;
+    if(audioEl){ audioEl.pause(); audioEl.src = ''; audioEl.removeEventListener('ended', null); }
+    if(id === 'none'){
+        selectedMusic = null;
+        stopMusic();
+    } else if(id.startsWith('gen:')){
+        stopMusic();
+        startA(id.replace('gen:',''));
+    } else if(id.startsWith('file:')){
+        // id = 'file:/music/xxx.mp3' → API = 'http://localhost:8765' → 'http://localhost:8765/music/xxx.mp3'
+        const src = API + id.replace('file:', '');
+        audioEl = new Audio(src);
+        audioEl.loop = (musicMode === 'loop');
+        audioEl.addEventListener('ended', ()=>{
+            if(musicMode === 'shuffle') playRandomMusic();
+        });
+        const vol = parseInt(document.getElementById('ss4')?.value || 50);
+        audioEl.volume = vol / 200;
+        audioEl.play().catch(()=>{});
+    }
+    renderMusicList();
+}
+
+function playRandomMusic(){
+    const allFiles = musicFiles.map(m=>'file:'+m.file);
+    if(allFiles.length === 0) return;
+    const idx = Math.floor(Math.random() * allFiles.length);
+    playMusic(allFiles[idx]);
+}
+
+function stopMusic(){
+    if(audioEl){ audioEl.pause(); audioEl.src = ''; audioEl = null; }
+    if(typeof stopA !== 'undefined') stopA();
+}
+
+function setMusicMode(mode){
+    musicMode = mode;
+    updateMusicModeBtn();
+    // 保存到config.json
+    fetch(API+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({immersion:{music_mode:mode}})}).catch(()=>{});
+    // 如果正在播放，切换循环模式
+    if(audioEl && selectedMusic?.startsWith('file:')){
+        audioEl.loop = (mode === 'loop');
+    }
+    toast(mode === 'loop' ? '单曲循环' : '随机播放');
+}
+
+function updateMusicModeBtn(){
+    const loopBtn = document.getElementById('musicLoopBtn');
+    const shuffleBtn = document.getElementById('musicShuffleBtn');
+    if(loopBtn) loopBtn.style.borderColor = musicMode==='loop'?'var(--accent-primary)':'';
+    if(shuffleBtn) shuffleBtn.style.borderColor = musicMode==='shuffle'?'var(--accent-primary)':'';
+}
+
+// ========== 本地音乐目录 ==========
+let localMusicDir = localStorage.getItem('flow_music_dir') || '';
+
+function saveMusicDir(){
+    const inp = document.getElementById('musicDirInput');
+    const dir = inp ? inp.value.trim() : '';
+    if(!dir){ toast('请输入目录路径'); return; }
+    localMusicDir = dir;
+    localStorage.setItem('flow_music_dir', dir);
+    restoreMusicDir();
+    // 保存目录到config.json并加载音乐
+    fetch(API+'/api/config',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({immersion:{music_dir:dir}})
+    }).then(()=>loadMusicFromDir()).catch(()=>loadMusicFromDir());
+    toast('已保存目录: ' + dir);
+}
+
+function restoreMusicDir(){
+    const el = document.getElementById('musicDirPath');
+    const inp = document.getElementById('musicDirInput');
+    if(el) el.textContent = localMusicDir ? '📁 ' + localMusicDir : '（输入目录路径后点击"保存"';
+    if(inp && localMusicDir) inp.value = localMusicDir;
+}
+
+async function loadMusicFromDir(){
+    try{
+        const r = await fetch(API+'/api/music/list');
+        const d = await r.json();
+        const oldCount = musicFiles.length;
+        musicFiles = d.files || [];
+        const newCount = musicFiles.length;
+        renderMusicList();
+        if(newCount > 0){
+            toast('已加载 ' + newCount + ' 首音乐');
+        } else {
+            toast('目录无音乐文件，请放入.mp3/.wav/.ogg/.m4a文件');
+        }
+    }catch(e){
+        toast('加载失败，请确认目录可访问');
+    }
+}
+
+async function handleMusicFiles(files){
+    if(!files || files.length === 0) return;
+    toast('收到 ' + files.length + ' 个文件，请在Skill目录中管理音乐文件');
+    // 前端只播放第一个，其余通过Music列表管理
+    if(files.length > 0){
+        const url = URL.createObjectURL(files[0]);
+        selectedMusic = 'blob:' + Date.now();
+        if(audioEl){ audioEl.pause(); audioEl.src = ''; }
+        audioEl = new Audio(url);
+        audioEl.loop = (musicMode === 'loop');
+        audioEl.addEventListener('ended', ()=>{
+            if(musicMode === 'shuffle') playRandomMusic();
+        });
+        const vol = parseInt(document.getElementById('ss4')?.value || 50);
+        audioEl.volume = vol / 200;
+        audioEl.play().catch(()=>{});
+        toast('正在播放: ' + files[0].name);
+    }
+}
+
+function setMusicVolume(vol){
+    if(audioEl) audioEl.volume = vol / 200;
+}
+
+</script>
+<!-- ========== 删除确认弹窗 ========== -->
+<div class="overlay" id="deleteConfirmOverlay" style="background:rgba(6,6,14,0.97)">
+    <div class="panel" style="text-align:center;max-width:280px">
+        <div class="panel-title" style="font-size:0.75rem;color:var(--muted);margin-bottom:0.6rem;letter-spacing:0.1em">&#x26A0; <span id="deleteConfirmTitle">确认删除</span></div>
+        <div style="font-size:0.7rem;color:var(--text);line-height:1.5;margin-bottom:0.8rem" id="deleteConfirmMsg"></div>
+        <input type="hidden" id="deleteReminderId">
+        <div style="display:flex;gap:0.5rem;justify-content:center">
+            <button class="ctrl-btn" onclick="closeDeleteConfirm()" style="font-size:0.65rem;padding:0.35rem 0.8rem;min-width:70px" id="deleteCancelBtn">取消</button>
+            <button class="ctrl-btn primary" onclick="doDeleteReminder()" style="font-size:0.65rem;padding:0.35rem 0.8rem;min-width:70px" id="deleteOkBtn">确认删除</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

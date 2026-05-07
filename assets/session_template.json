@@ -1,0 +1,25 @@
+{
+  "session_id": "",
+  "start_time": "",
+  "end_time": "",
+  "task": "",
+  "planned_minutes": 25,
+  "actual_minutes": 0,
+  "completed": false,
+  "status": "active",
+  "checkins": [],
+  "energy_before": 7,
+  "energy_after": 5,
+  "dopamine_breaks": 0,
+  "autopsy": {
+    "what_helped": "",
+    "what_didnt": "",
+    "next_time": "",
+    "accomplished": ""
+  },
+  "chronotype": "bear",
+  "companion_type": "ambient",
+  "immersion_used": false,
+  "wallpaper_changed": false,
+  "music_played": false
+}

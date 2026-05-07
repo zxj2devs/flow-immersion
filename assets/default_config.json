@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "user_profile": {
+    "name": "用户",
+    "chronotype": "bear"
+  },
+  "timer": {
+    "work_minutes": 25,
+    "break_minutes": 5,
+    "long_break_minutes": 15,
+    "rounds": 4
+  },
+  "adhd": {
+    "companion_enabled": true,
+    "companion_type": "ambient",
+    "checkin_interval_minutes": 20,
+    "micro_task_enabled": true
+  },
+  "immersion": {
+    "hide_desktop_icons": true,
+    "wallpaper_type": "static",
+    "wallpaper_source": "bundled",
+    "wallpaper_path": "",
+    "bundled_wallpaper": "ocean",
+    "search_enabled": false,
+    "music_enabled": true,
+    "music_volume": 0.5,
+    "music_source": "bundled",
+    "music_path": "",
+    "bundled_music": "ambient"
+  },
+  "storage": {
+    "path": "",
+    "auto_backup": true
+  },
+  "created_at": "",
+  "updated_at": ""
+}
